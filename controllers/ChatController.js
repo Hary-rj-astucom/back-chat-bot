@@ -1,4 +1,6 @@
 const OpenAiService = require('../services/OpenAiApiService');
+const ConversationChat = require('../models/ConversationChat.js');
+const MessageChat = require('../models/MessageChat.js');
 
 const openAiService = new OpenAiService();
 
@@ -20,9 +22,21 @@ async function postMagentoMessage(req, res) {
       return res.status(400).json({ error: 'message est requis (string non vide).' });
     }
 
+    // -- verification de la base de donnees et stockage de la conversation --
+    let conversation = await ConversationChat.findOne({ where: { session_id: sessionId } });
+    if(!conversation){
+      conversation = await ConversationChat.create({ session_id: sessionId, project_id: 2 });
+    }
+
+    // -- sauvegarde du message du client --
+    await MessageChat.create({ conversation_chat_id: conversation.id, acteur: "client", message: message });
+
     const history = conversations.get(sessionId) || [];
 
     const { reply, history: updatedHistory } = await openAiService.magentochat(history, message.trim());
+
+    // -- sauvegarde du message de l'ia --
+    await MessageChat.create({ conversation_chat_id: conversation.id,  acteur: "agent IA", message: reply });
 
     conversations.set(sessionId, updatedHistory.slice(-MAX_HISTORY_LENGTH));
 
