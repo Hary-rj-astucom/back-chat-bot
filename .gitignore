@@ -1,0 +1,4 @@
+# Ignore external dependencies and package environments
+node_modules/
+venv/
+.env
