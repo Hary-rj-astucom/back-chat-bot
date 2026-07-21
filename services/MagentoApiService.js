@@ -47,6 +47,36 @@ function buildSearchCriteria(filterGroups = [], options = {}) {
   return params.toString();
 }
 
+/**
+ * Garde-fou serveur pour toutes les requêtes de type "liste".
+ * On NE FAIT JAMAIS confiance aveuglément aux options transmises par
+ * le modèle IA : pageSize est systématiquement borné, et un tri par
+ * défaut (le plus récent en premier) est appliqué si rien n'est précisé.
+ *
+ * - pageSize : borné entre 1 et MAX_PAGE_SIZE (défaut DEFAULT_PAGE_SIZE)
+ * - sortField / sortDirection : valeurs par défaut si absentes
+ */
+const DEFAULT_PAGE_SIZE = 5;
+const MAX_PAGE_SIZE = 10;
+
+function normalizeListOptions(options = {}, defaults = {}) {
+  const requestedSize = parseInt(options.pageSize, 10);
+  const pageSize = Number.isFinite(requestedSize)
+    ? Math.min(Math.max(requestedSize, 1), MAX_PAGE_SIZE)
+    : (defaults.pageSize || DEFAULT_PAGE_SIZE);
+
+  const currentPage = Number.isFinite(parseInt(options.currentPage, 10))
+    ? Math.max(parseInt(options.currentPage, 10), 1)
+    : 1;
+
+  return {
+    pageSize,
+    currentPage,
+    sortField: options.sortField || defaults.sortField || 'created_at',
+    sortDirection: (options.sortDirection === 'ASC' ? 'ASC' : 'DESC')
+  };
+}
+
 function handleError(context, error) {
   console.error(`Erreur_Magento [${context}]:`, error.response?.data || error.message);
   throw error;
@@ -83,11 +113,13 @@ async function get_order_by_increment_id(orderNumber) {
 }
 
 // Dernières commandes d'un client via son email
-async function get_last_orders_by_email(email, limit = 5) {
+// (limit conservé pour compat, mais borné via normalizeListOptions)
+async function get_last_orders_by_email(email, limit = DEFAULT_PAGE_SIZE) {
   try {
+    const { pageSize, sortField, sortDirection } = normalizeListOptions({ pageSize: limit });
     const query = buildSearchCriteria(
       [[{ field: 'customer_email', value: email, condition_type: 'eq' }]],
-      { pageSize: limit, sortField: 'created_at', sortDirection: 'DESC' }
+      { pageSize, sortField, sortDirection }
     );
     const { data } = await magento.get(`/orders?${query}`);
     return data.items || [];
@@ -97,11 +129,13 @@ async function get_last_orders_by_email(email, limit = 5) {
 }
 
 // Toutes les commandes d'un client via son customer_id
+// -> pagination et tri désormais TOUJOURS appliqués (5 par défaut, 10 max)
 async function get_customer_orders(customerId, options = {}) {
   try {
+    const normalized = normalizeListOptions(options);
     const query = buildSearchCriteria(
       [[{ field: 'customer_id', value: customerId, condition_type: 'eq' }]],
-      { sortField: 'created_at', sortDirection: 'DESC', ...options }
+      normalized
     );
     const { data } = await magento.get(`/orders?${query}`);
     return data.items || [];
@@ -110,11 +144,14 @@ async function get_customer_orders(customerId, options = {}) {
   }
 }
 
-// Recherche générique de commandes
-// filterGroups = [ [ {field, value, condition_type} ] ]
+// Recherche générique de commandes (usage interne / admin uniquement,
+// NE PAS exposer directement au modèle IA : filterGroups arbitraires =
+// risque d'accès à des données hors périmètre du client courant.
+// Côté tools, on passe par des wrappers dédiés type search_orders_by_status)
 async function search_orders(filterGroups = [], options = {}) {
   try {
-    const query = buildSearchCriteria(filterGroups, options);
+    const normalized = normalizeListOptions(options);
+    const query = buildSearchCriteria(filterGroups, normalized);
     const { data } = await magento.get(`/orders?${query}`);
     return data;
   } catch (error) {
@@ -165,8 +202,6 @@ async function get_order_total(orderId) {
 // LIVRAISON / EXPÉDITION (Shipments)
 // ============================================================
 
-// Suivi de livraison d'une commande (via les expéditions liées)
-// Retourne les shipments + leurs "tracks" (transporteur, numéro de suivi...)
 async function get_tracking(orderId) {
   try {
     const query = buildSearchCriteria([[{ field: 'order_id', value: orderId, condition_type: 'eq' }]]);
@@ -179,7 +214,6 @@ async function get_tracking(orderId) {
   }
 }
 
-// Méthode de livraison utilisée sur une commande
 async function get_shipping_method(orderId) {
   try {
     const order = await get_order(orderId);
@@ -192,7 +226,6 @@ async function get_shipping_method(orderId) {
   }
 }
 
-// Coût de livraison d'une commande
 async function get_shipping_cost(orderId) {
   try {
     const order = await get_order(orderId);
@@ -210,7 +243,6 @@ async function get_shipping_cost(orderId) {
 // PAIEMENT (Payment)
 // ============================================================
 
-// Méthode de paiement d'une commande
 async function get_payment_method(orderId) {
   try {
     const order = await get_order(orderId);
@@ -228,7 +260,6 @@ async function get_payment_method(orderId) {
 // FACTURES / AVOIRS (Invoices / Credit memos)
 // ============================================================
 
-// Facture(s) liée(s) à une commande
 async function get_invoice(orderId) {
   try {
     const query = buildSearchCriteria([[{ field: 'order_id', value: orderId, condition_type: 'eq' }]]);
@@ -239,7 +270,6 @@ async function get_invoice(orderId) {
   }
 }
 
-// Avoir(s) lié(s) à une commande
 async function get_credit_memo(orderId) {
   try {
     const query = buildSearchCriteria([[{ field: 'order_id', value: orderId, condition_type: 'eq' }]]);
@@ -255,11 +285,13 @@ async function get_credit_memo(orderId) {
 // ============================================================
 
 // Recherche de produits par mot-clé (sur le nom)
+// -> pagination et tri désormais TOUJOURS appliqués (5 par défaut, 10 max)
 async function search_products(query, options = {}) {
   try {
+    const normalized = normalizeListOptions(options, { sortField: 'name' });
     const qs = buildSearchCriteria(
       [[{ field: 'name', value: `%${query}%`, condition_type: 'like' }]],
-      options
+      normalized
     );
     const { data } = await magento.get(`/products?${qs}`);
     return data.items || [];
@@ -268,7 +300,6 @@ async function search_products(query, options = {}) {
   }
 }
 
-// Détail d'un produit via son SKU
 async function get_product(sku) {
   try {
     const { data } = await magento.get(`/products/${encodeURIComponent(sku)}`);
@@ -278,7 +309,6 @@ async function get_product(sku) {
   }
 }
 
-// Recherche d'un produit par nom exact
 async function get_product_by_name(name) {
   try {
     const qs = buildSearchCriteria([[{ field: 'name', value: name, condition_type: 'eq' }]]);
@@ -289,7 +319,6 @@ async function get_product_by_name(name) {
   }
 }
 
-// Prix d'un produit
 async function get_product_price(sku) {
   try {
     const product = await get_product(sku);
@@ -302,7 +331,6 @@ async function get_product_price(sku) {
   }
 }
 
-// Stock disponible d'un produit
 async function get_product_stock(sku) {
   try {
     const { data } = await magento.get(`/stockItems/${encodeURIComponent(sku)}`);
@@ -312,7 +340,6 @@ async function get_product_stock(sku) {
   }
 }
 
-// Images d'un produit
 async function get_product_images(sku) {
   try {
     const product = await get_product(sku);
@@ -322,7 +349,6 @@ async function get_product_images(sku) {
   }
 }
 
-// Attributs custom d'un produit
 async function get_product_attributes(sku) {
   try {
     const product = await get_product(sku);
@@ -332,7 +358,6 @@ async function get_product_attributes(sku) {
   }
 }
 
-// Comparer deux produits
 async function compare_products(sku1, sku2) {
   try {
     const [p1, p2] = await Promise.all([get_product(sku1), get_product(sku2)]);
@@ -342,7 +367,6 @@ async function compare_products(sku1, sku2) {
   }
 }
 
-// Produits liés (related)
 async function get_related_products(sku) {
   try {
     const { data } = await magento.get(`/products/${encodeURIComponent(sku)}/links/related`);
@@ -352,7 +376,6 @@ async function get_related_products(sku) {
   }
 }
 
-// Ventes croisées (cross-sell)
 async function get_cross_sell_products(sku) {
   try {
     const { data } = await magento.get(`/products/${encodeURIComponent(sku)}/links/crosssell`);
@@ -362,7 +385,6 @@ async function get_cross_sell_products(sku) {
   }
 }
 
-// Montées en gamme (upsell)
 async function get_upsell_products(sku) {
   try {
     const { data } = await magento.get(`/products/${encodeURIComponent(sku)}/links/upsell`);
@@ -376,7 +398,6 @@ async function get_upsell_products(sku) {
 // CATÉGORIES
 // ============================================================
 
-// Arborescence complète des catégories
 async function get_categories() {
   try {
     const { data } = await magento.get('/categories');
@@ -386,7 +407,6 @@ async function get_categories() {
   }
 }
 
-// Détail d'une catégorie
 async function get_category(categoryId) {
   try {
     const { data } = await magento.get(`/categories/${categoryId}`);
@@ -396,7 +416,6 @@ async function get_category(categoryId) {
   }
 }
 
-// Produits d'une catégorie (SKU + position ; enrichir avec get_product si besoin)
 async function get_products_by_category(categoryId) {
   try {
     const { data } = await magento.get(`/categories/${categoryId}/products`);
@@ -406,17 +425,11 @@ async function get_products_by_category(categoryId) {
   }
 }
 
-// Nouveaux produits.
-// Approche : tri par date de création décroissante (approximation).
-// Pour une vraie logique "nouveautés", filtrer idéalement sur les
-// attributs news_from_date / news_to_date si indexés/filtrables.
-async function get_new_products(limit = 10) {
+// Nouveaux produits -> pagination désormais TOUJOURS bornée
+async function get_new_products(limit = DEFAULT_PAGE_SIZE) {
   try {
-    const qs = buildSearchCriteria([], {
-      pageSize: limit,
-      sortField: 'created_at',
-      sortDirection: 'DESC'
-    });
+    const normalized = normalizeListOptions({ pageSize: limit });
+    const qs = buildSearchCriteria([], normalized);
     const { data } = await magento.get(`/products?${qs}`);
     return data.items || [];
   } catch (error) {
@@ -424,27 +437,24 @@ async function get_new_products(limit = 10) {
   }
 }
 
-// Meilleures ventes.
-// ⚠️ Magento ne fournit pas ces données via l'API REST standard
-// (le rapport "Bestsellers" est réservé à l'Admin). Une implémentation
-// fiable nécessite soit un module custom exposant les données du
-// rapport, soit une agrégation manuelle depuis les order items
-// (coûteux, à éviter en usage direct/production sans cache).
-async function get_best_sellers(limit = 10) {
+// ⚠️ Endpoint custom requis (non standard Magento REST)
+async function get_best_sellers(limit = DEFAULT_PAGE_SIZE) {
   try {
-    const { data } = await magento.get(`/products/bestsellers?limit=${limit}`); // endpoint custom requis
+    const normalized = normalizeListOptions({ pageSize: limit });
+    const { data } = await magento.get(`/products/bestsellers?limit=${normalized.pageSize}`);
     return data;
   } catch (error) {
     handleError('get_best_sellers (endpoint custom requis)', error);
   }
 }
 
-// Recherche par marque.
-// ⚠️ Adapter attribute_code selon la config du catalogue (souvent
-// "manufacturer" ou "brand").
-async function search_brand(brand, attributeCode = 'manufacturer') {
+async function search_brand(brand, attributeCode = 'manufacturer', options = {}) {
   try {
-    const qs = buildSearchCriteria([[{ field: attributeCode, value: brand, condition_type: 'eq' }]]);
+    const normalized = normalizeListOptions(options, { sortField: 'name' });
+    const qs = buildSearchCriteria(
+      [[{ field: attributeCode, value: brand, condition_type: 'eq' }]],
+      normalized
+    );
     const { data } = await magento.get(`/products?${qs}`);
     return data.items || [];
   } catch (error) {
@@ -456,7 +466,6 @@ async function search_brand(brand, attributeCode = 'manufacturer') {
 // INFORMATIONS BOUTIQUE (Store / CMS)
 // ============================================================
 
-// Configuration générale de la boutique (nom, devise, locale, etc.)
 async function get_store_information() {
   try {
     const { data } = await magento.get('/store/storeConfigs');
@@ -466,22 +475,18 @@ async function get_store_information() {
   }
 }
 
-// Récupère une page CMS via son identifiant (slug)
 async function getCmsPageByIdentifier(identifier) {
   const qs = buildSearchCriteria([[{ field: 'identifier', value: identifier, condition_type: 'eq' }]]);
   const { data } = await magento.get(`/cmsPage/search?${qs}`);
   return data.items?.[0] || null;
 }
 
-// Récupère un bloc CMS via son identifiant
 async function getCmsBlockByIdentifier(identifier) {
   const qs = buildSearchCriteria([[{ field: 'identifier', value: identifier, condition_type: 'eq' }]]);
   const { data } = await magento.get(`/cmsBlock/search?${qs}`);
   return data.items?.[0] || null;
 }
 
-// Horaires d'ouverture. ⚠️ Non standard : provient généralement d'un
-// bloc CMS dédié. Adapter l'identifiant selon la config réelle.
 async function get_store_hours(blockIdentifier = 'store-hours') {
   try {
     return await getCmsBlockByIdentifier(blockIdentifier);
@@ -490,9 +495,6 @@ async function get_store_hours(blockIdentifier = 'store-hours') {
   }
 }
 
-// Localisation(s) physique(s) des magasins. ⚠️ Non natif à Magento
-// core (souvent géré par une extension type "Store Locator").
-// Fallback proposé : bloc CMS dédié.
 async function get_store_locations(blockIdentifier = 'store-locations') {
   try {
     return await getCmsBlockByIdentifier(blockIdentifier);
@@ -501,7 +503,6 @@ async function get_store_locations(blockIdentifier = 'store-locations') {
   }
 }
 
-// Coordonnées de contact. ⚠️ Non natif : bloc/page CMS ou store config.
 async function get_contact_information(blockIdentifier = 'contact-information') {
   try {
     return await getCmsBlockByIdentifier(blockIdentifier);
@@ -510,9 +511,6 @@ async function get_contact_information(blockIdentifier = 'contact-information') 
   }
 }
 
-// Conditions générales / conditions d'utilisation.
-// Utilise l'endpoint standard checkoutAgreements quand disponible,
-// sinon fallback sur une page CMS.
 async function get_terms(cmsIdentifier = 'terms-and-conditions') {
   try {
     const { data } = await magento.get('/checkoutAgreements');
@@ -523,7 +521,6 @@ async function get_terms(cmsIdentifier = 'terms-and-conditions') {
   }
 }
 
-// Politique de confidentialité. ⚠️ Page CMS, identifiant à adapter.
 async function get_privacy_policy(cmsIdentifier = 'privacy-policy-cookie-restriction-mode') {
   try {
     return await getCmsPageByIdentifier(cmsIdentifier);
@@ -532,7 +529,6 @@ async function get_privacy_policy(cmsIdentifier = 'privacy-policy-cookie-restric
   }
 }
 
-// Politique de retour. ⚠️ Page CMS, identifiant à adapter.
 async function get_return_policy(cmsIdentifier = 'return-policy') {
   try {
     return await getCmsPageByIdentifier(cmsIdentifier);
@@ -547,6 +543,7 @@ async function get_return_policy(cmsIdentifier = 'return-policy') {
 module.exports = {
   magento,
   buildSearchCriteria,
+  normalizeListOptions,
 
   // Commandes
   get_order,

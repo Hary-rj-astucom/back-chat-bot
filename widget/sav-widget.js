@@ -9,12 +9,14 @@
  *   <script
  *     src="https://TON_DOMAINE/sav-widget.js"
  *     data-api-url="https://TON_API.com"
+ *     data-project="mon-projet"
  *     data-shop-name="Ma Boutique"
  *   ></script>
  *
  * Options disponibles (attributs data-* sur la balise script) :
  *   data-api-url      (obligatoire) URL de base de ton backend Express
- *                      (le widget appelle POST {apiUrl}/api/chat)
+ *                      (le widget appelle POST {apiUrl}/chat/{project})
+ *   data-project       Identifiant du projet/boutique (utilisé dans l'URL)
  *   data-shop-name     Nom affiché dans l'en-tête (défaut: "Service client")
  *   data-color         Couleur principale du widget, ex: "#4338CA"
  *   data-position       "right" (défaut) ou "left"
@@ -148,6 +150,9 @@
     'box-shadow:0 1px 2px rgba(0,0,0,.06);}',
     '.sav-msg.user{align-self:flex-end;background:' + config.color + ';color:#fff;border-bottom-right-radius:4px;}',
     '.sav-msg.error{align-self:flex-start;background:#FDECEC;color:#B42318;border-bottom-left-radius:4px;}',
+    '.sav-msg a{color:inherit;text-decoration:underline;text-underline-offset:2px;word-break:break-word;}',
+    '.sav-msg.bot a,.sav-msg.error a{color:' + config.color + ';}',
+    '.sav-msg.user a{color:#fff;}',
     '.sav-typing{align-self:flex-start;display:flex;gap:4px;padding:11px 14px;background:#fff;',
     'border-radius:14px;border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.06);}',
     '.sav-typing span{width:6px;height:6px;border-radius:50%;background:#B7B7C9;',
@@ -246,6 +251,32 @@
     return String(str).replace(/"/g, '&quot;');
   }
 
+  // Échappe le texte (anti-XSS) PUIS transforme les URLs restantes en
+  // liens cliquables. On échappe toujours avant de réinjecter du HTML,
+  // même si le texte vient de notre propre backend.
+  var URL_REGEX = /((https?:\/\/|www\.)[^\s<]+)/gi;
+  function linkify(rawText) {
+    var escaped = escapeHtml(rawText);
+    return escaped.replace(URL_REGEX, function (match) {
+      // Retire la ponctuation finale collée à l'URL (., ,, ), etc.)
+      var trailing = '';
+      var cleanMatch = match;
+      var trailingRegex = /[.,;:!?)\]]+$/;
+      var m = cleanMatch.match(trailingRegex);
+      if (m) {
+        trailing = m[0];
+        cleanMatch = cleanMatch.slice(0, -trailing.length);
+      }
+      var href = /^https?:\/\//i.test(cleanMatch) ? cleanMatch : 'https://' + cleanMatch;
+      return (
+        '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' +
+        cleanMatch +
+        '</a>' +
+        trailing
+      );
+    });
+  }
+
   // ------------------------------------------------------------
   // 5. Rendu des messages
   // ------------------------------------------------------------
@@ -267,7 +298,7 @@
   function appendBubble(role, text, persist) {
     var div = document.createElement('div');
     div.className = 'sav-msg ' + role;
-    div.textContent = text;
+    div.innerHTML = linkify(text);
     elMessages.appendChild(div);
     if (persist) {
       messages.push({ role: role, text: text });
@@ -316,7 +347,7 @@
   elClose.addEventListener('click', closePanel);
 
   // ------------------------------------------------------------
-  // 7. Envoi des messages -> POST {apiUrl}/api/chat
+  // 7. Envoi des messages -> POST {apiUrl}/chat/{projet}
   // ------------------------------------------------------------
   function autoGrow() {
     elInput.style.height = 'auto';

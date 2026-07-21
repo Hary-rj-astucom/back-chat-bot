@@ -5,18 +5,29 @@
  * format "tools" attendu par l'API OpenAI (function calling).
  *
  * Deux choses ici :
- *  1. `toolDefinitions` : le schéma JSON que tu envoies à OpenAI
- *     pour lui dire "voici les fonctions que tu peux appeler".
- *  2. `toolImplementations` : la table de correspondance
+ *  1. `magentoToolDefinitions` : le schéma JSON que tu envoies à
+ *     OpenAI pour lui dire "voici les fonctions que tu peux appeler".
+ *  2. `magentoToolImplementations` : la table de correspondance
  *     nom-de-fonction -> vraie fonction JS à exécuter.
  *
- * Idée clé : tu n'exposes QUE les fonctions utiles au SAV client
- * (pas toutes les 40, pour ne pas noyer le modèle et limiter les
- * risques). Ajoute-en au fur et à mesure de tes besoins.
+ * Règle sur les fonctions de LISTE (search_products, get_customer_orders,
+ * search_orders_by_status...) : elles exposent toutes un paramètre
+ * `limit` borné (1 à 10, défaut 5) et sont TOUJOURS triées, pour éviter
+ * que le modèle ne réclame des listes trop longues ou non triées.
+ * Le vrai garde-fou est côté MagentoApiService.js (normalizeListOptions),
+ * ici c'est surtout pour guider correctement le modèle.
  * ------------------------------------------------------------
  */
 
 const magentoService = require('../services/MagentoApiService');
+
+const LIST_LIMIT_SCHEMA = {
+  type: 'integer',
+  description: 'Nombre de résultats à retourner (1 à 10).',
+  minimum: 1,
+  maximum: 10,
+  default: 5
+};
 
 // ------------------------------------------------------------
 // 1. Schémas des fonctions (ce que le modèle "voit")
@@ -45,14 +56,30 @@ const magentoToolDefinitions = [
     function: {
       name: 'get_last_orders_by_email',
       description:
-        "Récupère les dernières commandes d'un client à partir de son adresse email. Utile quand le client ne connaît pas son numéro de commande.",
+        "Récupère les commandes d'un client à partir de son adresse email, triées de la plus récente à la plus ancienne. C'est le point d'entrée par défaut quand le client ne connaît pas (ou ne donne pas) son numéro de commande.",
       parameters: {
         type: 'object',
         properties: {
           email: { type: 'string', description: 'Adresse email du client.' },
-          limit: { type: 'integer', description: 'Nombre de commandes à retourner.', default: 5 }
+          limit: LIST_LIMIT_SCHEMA
         },
         required: ['email']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_customer_orders',
+      description:
+        "Liste les commandes d'un client via son ID client interne (customer_id), triées de la plus récente à la plus ancienne. N'utilise cette fonction que si tu as déjà récupéré un customer_id via une commande existante ; sinon préfère get_last_orders_by_email.",
+      parameters: {
+        type: 'object',
+        properties: {
+          customerId: { type: 'string', description: 'ID client interne (customer_id).' },
+          limit: LIST_LIMIT_SCHEMA
+        },
+        required: ['customerId']
       }
     }
   },
@@ -172,11 +199,13 @@ const magentoToolDefinitions = [
     type: 'function',
     function: {
       name: 'search_products',
-      description: "Recherche des produits par mot-clé dans le nom. Utile quand le client cherche un produit sans en connaître le SKU.",
+      description:
+        "Recherche des produits par mot-clé dans le nom, triés par nom. Retourne au maximum 10 résultats.",
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Mot-clé de recherche.' }
+          query: { type: 'string', description: 'Mot-clé de recherche.' },
+          limit: LIST_LIMIT_SCHEMA
         },
         required: ['query']
       }
@@ -242,7 +271,13 @@ const magentoToolDefinitions = [
 // ------------------------------------------------------------
 const magentoToolImplementations = {
   get_order_by_increment_id: (args) => magentoService.get_order_by_increment_id(args.orderNumber),
-  get_last_orders_by_email: (args) => magentoService.get_last_orders_by_email(args.email, args.limit),
+
+  get_last_orders_by_email: (args) =>
+    magentoService.get_last_orders_by_email(args.email, args.limit),
+
+  get_customer_orders: (args) =>
+    magentoService.get_customer_orders(args.customerId, { pageSize: args.limit }),
+
   get_order_status: (args) => magentoService.get_order_status(args.orderId),
   get_order_items: (args) => magentoService.get_order_items(args.orderId),
   get_order_total: (args) => magentoService.get_order_total(args.orderId),
@@ -251,7 +286,10 @@ const magentoToolImplementations = {
   get_payment_method: (args) => magentoService.get_payment_method(args.orderId),
   get_invoice: (args) => magentoService.get_invoice(args.orderId),
   get_credit_memo: (args) => magentoService.get_credit_memo(args.orderId),
-  search_products: (args) => magentoService.search_products(args.query),
+
+  search_products: (args) =>
+    magentoService.search_products(args.query, { pageSize: args.limit }),
+
   get_product: (args) => magentoService.get_product(args.sku),
   get_product_stock: (args) => magentoService.get_product_stock(args.sku),
   get_return_policy: () => magentoService.get_return_policy(),
