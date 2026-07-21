@@ -9,8 +9,10 @@ const chatroute = require('./routes/ChatRoutes');
 const app = express();
 const port = process.env.PORT;
 
+app.use(cors());
 app.use(express.json())
 
+app.use(express.static(path.join(__dirname, 'widget')));
 app.use('/chat', chatroute);
 
 // Start the server

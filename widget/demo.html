@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Démo — Widget SAV</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 64px 24px;
+      background: #F7F7FB;
+      color: #26263B;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    h1 { font-size: 22px; }
+    code {
+      background: #EEEEF2;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Page de démo</h1>
+    <p>Cette page simule un site e-commerce quelconque. Le widget SAV doit apparaître
+       en bas à droite, indépendamment du contenu de cette page.</p>
+    <p>Modifie <code>data-api-url</code> ci-dessous pour pointer vers ton backend
+       (ex: <code>http://localhost:3001</code>).</p>
+  </div>
+
+  <!-- ==== C'est la SEULE ligne à copier sur un vrai site ==== -->
+  <script
+    src="./sav-widget.js"
+    data-api-url="http://localhost:3001"
+    data-shop-name="Ma Boutique"
+    data-color="#4338CA"
+    data-accent="#00C2A8"
+    data-welcome-message="Bonjour 👋 Comment puis-je vous aider avec votre commande aujourd'hui ?"
+    data-project="magento"
+  ></script>
+</body>
+</html>
