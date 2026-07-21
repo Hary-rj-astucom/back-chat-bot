@@ -31,6 +31,8 @@ Règles :
    "entity_id", "SKU", "API", "increment_id" dans tes réponses au client).
 `.trim();
 
+const MAX_TOOL_ROUNDS = 5;
+
 class OpenAiService {
   constructor(apiKey = process.env.OPENAI_SECRET_KEY, model = process.env.OPENAI_MODEL) {
     if (!apiKey) {
@@ -41,111 +43,59 @@ class OpenAiService {
   }
 
   /**
-   * Point d'entrée principal du chatbot.
+   * Chat SAV branché sur les outils Magento.
    *
-   * @param {Array} history - historique de conversation déjà existant,
-   *   au format OpenAI: [{ role: 'user'|'assistant'|'system', content: '...' }, ...]
-   *   (NE PAS inclure le system prompt ici, il est ajouté automatiquement)
+   * @param {Array} history - historique de conversation existant
    * @param {string} userMessage - nouveau message du client
+   * @param {Object} context - infos connues sur le client, ex: { customerEmail }
    * @returns {Promise<{ reply: string, history: Array }>}
    */
-  async magentochat(history = [], userMessage) {
-    const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...history,
-      { role: 'user', content: userMessage }
-    ];
-
-    // Boucle de function calling : le modèle peut demander plusieurs
-    // appels d'outils successifs avant de donner sa réponse finale.
-    const MAX_TOOL_ROUNDS = 5;
-    let round = 0;
-
-    while (round < MAX_TOOL_ROUNDS) {
-      round++;
-
-      const response = await this.client.chat.completions.create({
-        model: this.model,
-        messages,
-        tools: magentoToolDefinitions,
-        tool_choice: 'auto',
-        temperature: 0.3 // bas = réponses plus factuelles, moins créatives (important pour du SAV)
-      });
-
-      const choice = response.choices[0];
-      const assistantMessage = choice.message;
-
-      // Cas 1 : le modèle veut appeler un ou plusieurs outils
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        // On ajoute le message assistant (avec ses tool_calls) à l'historique
-        messages.push(assistantMessage);
-
-        // On exécute chaque appel d'outil demandé
-        for (const toolCall of assistantMessage.tool_calls) {
-          const fnName = toolCall.function.name;
-          let args = {};
-          try {
-            args = JSON.parse(toolCall.function.arguments || '{}');
-          } catch (e) {
-            args = {};
-          }
-
-          let result;
-          try {
-            const impl = magentoToolImplementations[fnName];
-            if (!impl) throw new Error(`Fonction inconnue: ${fnName}`);
-            result = await impl(args);
-          } catch (error) {
-            // On ne casse jamais la conversation : on renvoie l'erreur
-            // au modèle sous forme de texte, il saura la gérer/reformuler.
-            result = { error: true, message: error.message || 'Erreur inconnue.' };
-          }
-
-          // Réponse de l'outil réinjectée dans la conversation
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify(result ?? null)
-          });
-        }
-
-        // On reboucle : on renvoie tout au modèle pour qu'il continue
-        // (soit un nouvel appel d'outil, soit la réponse finale)
-        continue;
-      }
-
-      // Cas 2 : réponse finale en texte, on sort de la boucle
-      const finalHistory = [...history, { role: 'user', content: userMessage }, assistantMessage];
-      return { reply: assistantMessage.content, history: finalHistory };
-    }
-
-    // Garde-fou si jamais le modèle boucle trop sur des appels d'outils
-    return {
-      reply:
-        "Je rencontre une difficulté à traiter votre demande automatiquement. Un conseiller va prendre le relais.",
-      history: [...history, { role: 'user', content: userMessage }]
-    };
+  async magentochat(history = [], userMessage, context = {}) {
+    return this._runChat(history, userMessage, context, magentoToolDefinitions, magentoToolImplementations);
   }
 
   /**
-   * Point d'entrée principal du chatbot.
+   * Chat SAV branché sur les outils PrestaShop.
    *
-   * @param {Array} history - historique de conversation déjà existant,
-   *   au format OpenAI: [{ role: 'user'|'assistant'|'system', content: '...' }, ...]
-   *   (NE PAS inclure le system prompt ici, il est ajouté automatiquement)
+   * @param {Array} history - historique de conversation existant
    * @param {string} userMessage - nouveau message du client
+   * @param {Object} context - infos connues sur le client, ex: { customerEmail }
    * @returns {Promise<{ reply: string, history: Array }>}
    */
-  async prestashopchat(history = [], userMessage) {
-    const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...history,
-      { role: 'user', content: userMessage }
-    ];
+  async prestashopchat(history = [], userMessage, context = {}) {
+    return this._runChat(history, userMessage, context, prestashopToolDefinitions, prestashopToolImplementations);
+  }
+
+  /**
+   * Logique commune de conversation + function calling, partagée entre
+   * magentochat et prestashopchat (avant, c'était le même code dupliqué
+   * deux fois avec juste les tools qui changeaient).
+   *
+   * @private
+   */
+  async _runChat(history, userMessage, context, toolDefinitions, toolImplementations) {
+    const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+
+    // Si le widget a réussi à identifier le client (déjà connecté sur
+    // le site Magento/PrestaShop), on le donne au modèle une bonne
+    // fois pour toutes, pour qu'il ne redemande jamais l'email.
+    if (context.customerEmail) {
+      messages.push({
+        role: 'system',
+        content:
+          `Le client est déjà identifié : son email est ${context.customerEmail} ` +
+          `(récupéré automatiquement depuis sa session connectée sur le site, ` +
+          `pas besoin de le lui redemander). Utilise directement cet email pour ` +
+          `retrouver ses commandes. S'il mentionne explicitement vouloir chercher ` +
+          `avec un autre email ou un numéro de commande précis, utilise plutôt ` +
+          `cette information-là.`
+      });
+    }
+
+    messages.push(...history, { role: 'user', content: userMessage });
 
     // Boucle de function calling : le modèle peut demander plusieurs
     // appels d'outils successifs avant de donner sa réponse finale.
-    const MAX_TOOL_ROUNDS = 5;
     let round = 0;
 
     while (round < MAX_TOOL_ROUNDS) {
@@ -154,7 +104,7 @@ class OpenAiService {
       const response = await this.client.chat.completions.create({
         model: this.model,
         messages,
-        tools: prestashopToolDefinitions,
+        tools: toolDefinitions,
         tool_choice: 'auto',
         temperature: 0.3 // bas = réponses plus factuelles, moins créatives (important pour du SAV)
       });
@@ -179,7 +129,7 @@ class OpenAiService {
 
           let result;
           try {
-            const impl = prestashopToolImplementations[fnName];
+            const impl = toolImplementations[fnName];
             if (!impl) throw new Error(`Fonction inconnue: ${fnName}`);
             result = await impl(args);
           } catch (error) {

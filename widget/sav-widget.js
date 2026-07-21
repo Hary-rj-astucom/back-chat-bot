@@ -16,11 +16,15 @@
  * Options disponibles (attributs data-* sur la balise script) :
  *   data-api-url      (obligatoire) URL de base de ton backend Express
  *                      (le widget appelle POST {apiUrl}/chat/{project})
- *   data-project       Identifiant du projet/boutique (utilisé dans l'URL)
+ *   data-project       Identifiant du projet/boutique (utilisé dans l'URL
+ *                      et pour cloisonner le localStorage entre widgets)
  *   data-shop-name     Nom affiché dans l'en-tête (défaut: "Service client")
  *   data-color         Couleur principale du widget, ex: "#4338CA"
  *   data-position       "right" (défaut) ou "left"
  *   data-welcome-message  Message d'accueil affiché à l'ouverture
+ *   data-customer-email   Email du client déjà connecté (injecté côté
+ *                         serveur par le template Magento/PrestaShop),
+ *                         pour éviter de le lui redemander dans le chat
  * ------------------------------------------------------------
  */
 (function () {
@@ -40,6 +44,21 @@
       return scripts[scripts.length - 1];
     })();
 
+  // Détecte l'email du client déjà connecté sur le site hôte, pour ne
+  // pas avoir à le lui redemander dans le chat.
+  // Priorité :
+  //   1. data-customer-email injecté côté SERVEUR dans le template
+  //      Magento/PrestaShop (le plus fiable : `{{ customer.email }}`
+  //      côté Magento .phtml, `{$customer.email}` côté PrestaShop .tpl)
+  // Si le client n'est pas connecté, ça reste simplement vide et le
+  // bot lui demandera son email normalement.
+  function detectCustomerEmail() {
+    var explicit = currentScript.getAttribute('data-customer-email');
+    if (explicit && explicit.trim()) return explicit.trim();
+
+    return '';
+  }
+
   var config = {
     apiUrl: (currentScript.getAttribute('data-api-url') || '').replace(/\/$/, ''),
     projet: (currentScript.getAttribute('data-project') || '').replace(/\/$/, ''),
@@ -47,10 +66,21 @@
     color: currentScript.getAttribute('data-color') || '#4338CA',
     accent: currentScript.getAttribute('data-accent') || '#00C2A8',
     position: currentScript.getAttribute('data-position') === 'left' ? 'left' : 'right',
+    customerEmail: detectCustomerEmail(),
     welcomeMessage:
       currentScript.getAttribute('data-welcome-message') ||
       'Bonjour 👋 Comment puis-je vous aider avec votre commande aujourd\u2019hui ?'
   };
+
+  // Si le script est chargé très tôt (ex: dans le <head>), le JS du
+  // thème (window.prestashop, etc.) peut ne pas encore exister. On
+  // retente une fois au chargement complet de la page.
+  if (!config.customerEmail) {
+    window.addEventListener('load', function () {
+      var found = detectCustomerEmail();
+      if (found) config.customerEmail = found;
+    });
+  }
 
   if (!config.apiUrl) {
     console.error('[SAV Widget] data-api-url est requis sur la balise <script>.');
@@ -286,7 +316,11 @@
   function renderAll() {
     elMessages.innerHTML = '';
     if (messages.length === 0) {
-      appendBubble('bot', config.welcomeMessage, false);
+      var welcome = config.welcomeMessage;
+      if (config.customerEmail) {
+        welcome += '\n\nJe vois que vous êtes connecté(e), je n\u2019aurai pas du mal pour retrouver vos commandes 👍';
+      }
+      appendBubble('bot', welcome, false);
     } else {
       messages.forEach(function (m) {
         appendBubble(m.role, m.text, false);
@@ -379,7 +413,11 @@
     fetch(config.apiUrl + '/chat/' + config.projet, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: sessionId, message: text })
+      body: JSON.stringify({
+        sessionId: sessionId,
+        message: text,
+        customerEmail: config.customerEmail || undefined
+      })
     })
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);

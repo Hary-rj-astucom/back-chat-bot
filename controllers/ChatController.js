@@ -11,6 +11,15 @@ const conversations = new Map();
 // la fenêtre de contexte sur une conversation longue)
 const MAX_HISTORY_LENGTH = 20;
 
+// Valide grossièrement un email fourni par le widget (client déjà
+// connecté sur le site), pour éviter d'injecter n'importe quoi dans
+// le contexte envoyé au modèle.
+function extractCustomerContext(body) {
+  const { customerEmail } = body || {};
+  const isValidEmail = typeof customerEmail === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
+  return isValidEmail ? { customerEmail: customerEmail.trim() } : {};
+}
+
 async function postMagentoMessage(req, res) {
   try {
     const { sessionId, message } = req.body;
@@ -21,6 +30,8 @@ async function postMagentoMessage(req, res) {
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ error: 'message est requis (string non vide).' });
     }
+
+    const context = extractCustomerContext(req.body);
 
     // -- verification de la base de donnees et stockage de la conversation --
     let conversation = await ConversationChat.findOne({ where: { session_id: sessionId } });
@@ -33,7 +44,7 @@ async function postMagentoMessage(req, res) {
 
     const history = conversations.get(sessionId) || [];
 
-    const { reply, history: updatedHistory } = await openAiService.magentochat(history, message.trim());
+    const { reply, history: updatedHistory } = await openAiService.magentochat(history, message.trim(), context);
 
     // -- sauvegarde du message de l'ia --
     await MessageChat.create({ conversation_chat_id: conversation.id,  acteur: "agent IA", message: reply });
@@ -42,7 +53,7 @@ async function postMagentoMessage(req, res) {
 
     return res.json({ reply });
   } catch (error) {
-    console.error('Erreur chatController.postMessage:', error);
+    console.error('Erreur chatController.postMagentoMessage:', error);
     return res.status(500).json({ error: "Une erreur est survenue, réessayez plus tard." });
   }
 }
@@ -58,6 +69,8 @@ async function postPrestashopMessage(req, res) {
       return res.status(400).json({ error: 'message est requis (string non vide).' });
     }
 
+    const context = extractCustomerContext(req.body);
+
     // -- verification de la base de donnees et stockage de la conversation --
     let conversation = await ConversationChat.findOne({ where: { session_id: sessionId } });
     if(!conversation){
@@ -69,7 +82,7 @@ async function postPrestashopMessage(req, res) {
 
     const history = conversations.get(sessionId) || [];
 
-    const { reply, history: updatedHistory } = await openAiService.prestashopchat(history, message.trim());
+    const { reply, history: updatedHistory } = await openAiService.prestashopchat(history, message.trim(), context);
 
     // -- sauvegarde du message de l'ia --
     await MessageChat.create({ conversation_chat_id: conversation.id,  acteur: "agent IA", message: reply });
@@ -78,7 +91,7 @@ async function postPrestashopMessage(req, res) {
 
     return res.json({ reply });
   } catch (error) {
-    console.error('Erreur chatController.postMessage:', error);
+    console.error('Erreur chatController.postPrestashopMessage:', error);
     return res.status(500).json({ error: "Une erreur est survenue, réessayez plus tard." });
   }
 }
