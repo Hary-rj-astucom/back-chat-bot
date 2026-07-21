@@ -1,0 +1,266 @@
+/**
+ * PrestashopTools.js
+ * ------------------------------------------------------------
+ * Fait le pont entre PrestashopApiService.js et le format "tools"
+ * attendu par l'API OpenAI (function calling). Même principe que
+ * magentoTools.js.
+ *
+ * Particularité Prestashop : plusieurs boutiques (Digiparf, Helfrich,
+ * Universce, Ambitioncse, Clubulys, Reducce).
+ *  - Pour les COMMANDES : le modèle n'a jamais besoin de préciser la
+ *    boutique, la recherche est automatique (getOrderByReference /
+ *    findOrderLocation scannent les boutiques concernées).
+ *  - Pour les PRODUITS et infos boutique : le modèle DOIT préciser la
+ *    boutique explicitement (paramètre `boutique`, en enum fermée).
+ * ------------------------------------------------------------
+ */
+
+const prestashopService = require('../services/PrestashopApiService');
+const ShippingboApiService = require('../services/ShippingboApiService');
+const shippingbo = new ShippingboApiService();
+
+const BOUTIQUE_ENUM = Object.keys(prestashopService.ALL_SHOPS);
+
+const LIST_LIMIT_SCHEMA = {
+  type: 'integer',
+  description: 'Nombre de résultats à retourner (1 à 10).',
+  minimum: 1,
+  maximum: 10,
+  default: 5
+};
+
+const BOUTIQUE_SCHEMA = {
+  type: 'string',
+  description: "Nom de la boutique concernée.",
+  enum: BOUTIQUE_ENUM
+};
+
+// ------------------------------------------------------------
+// 1. Schémas des fonctions (ce que le modèle "voit")
+// ------------------------------------------------------------
+const prestashopToolDefinitions = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_orders_by_email',
+      description:
+        "Récupère les dernières commandes d'un client à partir de son adresse email, tous magasins confondus, triées de la plus récente à la plus ancienne. C'est le point d'entrée par défaut quand le client ne connaît pas (ou ne donne pas) son numéro de commande.",
+      parameters: {
+        type: 'object',
+        properties: {
+          email: { type: 'string', description: 'Adresse email du client.' },
+          limit: LIST_LIMIT_SCHEMA
+        },
+        required: ['email']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_order_by_reference',
+      description:
+        "Récupère TOUTES les informations d'une commande (détail commande, client, statut, articles, paiement) à partir de son numéro de référence visible par le client. Recherche automatiquement dans toutes les boutiques, pas besoin de préciser laquelle. À utiliser en priorité si le client pose plusieurs questions à la fois sur sa commande (ex: statut ET contenu ET paiement). Si une seule information précise est demandée (juste le statut, juste le suivi...), préfère la fonction dédiée correspondante, plus rapide.",
+      parameters: {
+        type: 'object',
+        properties: {
+          reference: { type: 'string', description: 'Numéro de référence de commande visible par le client.' }
+        },
+        required: ['reference']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_order_status',
+      description: "Donne uniquement le statut d'une commande (ex: en cours de traitement, expédiée, livrée, annulée).",
+      parameters: {
+        type: 'object',
+        properties: {
+          reference: { type: 'string', description: 'Numéro de référence de commande.' }
+        },
+        required: ['reference']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_order_items',
+      description: "Liste uniquement les articles (produits, quantités) contenus dans une commande.",
+      parameters: {
+        type: 'object',
+        properties: {
+          reference: { type: 'string', description: 'Numéro de référence de commande.' }
+        },
+        required: ['reference']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_order_total',
+      description: "Donne uniquement le détail financier d'une commande (total payé, produits, livraison, remises).",
+      parameters: {
+        type: 'object',
+        properties: {
+          reference: { type: 'string', description: 'Numéro de référence de commande.' }
+        },
+        required: ['reference']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_tracking',
+      description: "Donne uniquement les informations de suivi de livraison (transporteur, numéro de suivi) d'une commande.",
+      parameters: {
+        type: 'object',
+        properties: {
+          reference: { type: 'string', description: 'Numéro de référence de commande.' }
+        },
+        required: ['reference']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_payment_method',
+      description: "Donne uniquement la méthode de paiement et les détails de transaction d'une commande.",
+      parameters: {
+        type: 'object',
+        properties: {
+          reference: { type: 'string', description: 'Numéro de référence de commande.' }
+        },
+        required: ['reference']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_products',
+      description: "Recherche des produits par mot-clé dans le nom, dans UNE boutique précise. Retourne au maximum 10 résultats.",
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Mot-clé de recherche.' },
+          boutique: BOUTIQUE_SCHEMA,
+          limit: LIST_LIMIT_SCHEMA
+        },
+        required: ['query', 'boutique']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_product',
+      description: "Détail complet d'un produit via son ID PrestaShop, dans une boutique précise.",
+      parameters: {
+        type: 'object',
+        properties: {
+          idProduct: { type: 'string', description: 'ID PrestaShop du produit.' },
+          boutique: BOUTIQUE_SCHEMA
+        },
+        required: ['idProduct', 'boutique']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_product_stock',
+      description: "Vérifie la disponibilité en stock d'un produit via son ID, dans une boutique précise.",
+      parameters: {
+        type: 'object',
+        properties: {
+          idProduct: { type: 'string', description: 'ID PrestaShop du produit.' },
+          boutique: BOUTIQUE_SCHEMA
+        },
+        required: ['idProduct', 'boutique']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_return_policy',
+      description: "Donne la politique de retour d'une boutique précise.",
+      parameters: {
+        type: 'object',
+        properties: { boutique: BOUTIQUE_SCHEMA },
+        required: ['boutique']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_contact_information',
+      description: "Donne les coordonnées de contact du service client d'une boutique précise.",
+      parameters: {
+        type: 'object',
+        properties: { boutique: BOUTIQUE_SCHEMA },
+        required: ['boutique']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_store_hours',
+      description: "Donne les horaires d'ouverture du service client d'une boutique précise.",
+      parameters: {
+        type: 'object',
+        properties: { boutique: BOUTIQUE_SCHEMA },
+        required: ['boutique']
+      }
+    }
+  },
+  // fonction issue de shippingbo
+  {
+    type: 'function',
+    function: {
+      name: 'get_order_shippinbo_info_by_reference',
+      description: "Retourne tout ce qui est processus de preparation jusqu'a livraison de la commande à partir de son numéro visible par le client. Information visible depuis shippingbo. Il faut appeller cette fonction quand on ne trouve pas de lien de suivi sur les autres fonctions",
+      parameters: {
+        type: 'object',
+        properties: {
+          reference: { type: 'string', description: 'Le numero de commande visible par le client' }
+        },
+        required: ['reference']
+      }
+    }
+  },
+];
+
+// ------------------------------------------------------------
+// 2. Table de correspondance nom -> fonction réelle
+// ------------------------------------------------------------
+const prestashopToolImplementations = {
+  get_orders_by_email: (args) => prestashopService.getOrdersByEmail(args.email, args.limit),
+  get_order_by_reference: (args) => prestashopService.getOrderByReference(args.reference),
+  get_order_status: (args) => prestashopService.getOrderStatus(args.reference),
+  get_order_items: (args) => prestashopService.getOrderItems(args.reference),
+  get_order_total: (args) => prestashopService.getOrderTotal(args.reference),
+  get_tracking: (args) => prestashopService.getTracking(args.reference),
+  get_payment_method: (args) => prestashopService.getPaymentMethod(args.reference),
+
+  search_products: (args) => prestashopService.searchProducts(args.query, args.boutique, args.limit),
+  get_product: (args) => prestashopService.getProduct(args.idProduct, args.boutique),
+  get_product_stock: (args) => prestashopService.getProductStock(args.idProduct, args.boutique),
+
+  get_return_policy: (args) => prestashopService.getReturnPolicy(args.boutique),
+  get_contact_information: (args) => prestashopService.getContactInformation(args.boutique),
+  get_store_hours: (args) => prestashopService.getStoreHours(args.boutique),
+
+  // fonction issue de shippingbo
+  get_order_shippinbo_info_by_reference: (args) => shippingbo.getOrderByReference(args.reference),
+};
+
+module.exports = { prestashopToolDefinitions, prestashopToolImplementations };

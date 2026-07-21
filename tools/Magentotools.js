@@ -271,7 +271,7 @@ const magentoToolDefinitions = [
     type: 'function',
     function: {
       name: 'get_order_shippinbo_info_by_reference',
-      description: "Retourne tout ce qui est processus de preparation jusqu'a livraison de la commande à partir de son numéro visible par le client. Information visible depuis shippingbo",
+      description: "Retourne tout ce qui est processus de preparation jusqu'a livraison de la commande à partir de son numéro visible par le client. Information visible depuis shippingbo. Il faut appeller cette fonction quand on ne trouve pas de lien de suivi sur les autres fonctions",
       parameters: {
         type: 'object',
         properties: {

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const OpenAI = require('openai');
 const { magentoToolDefinitions, magentoToolImplementations } = require('../tools/magentoTools');
+const { prestashopToolDefinitions, prestashopToolImplementations } = require('../tools/Prestashoptools');
 
 // ------------------------------------------------------------
 // System prompt : c'est LUI qui "anticipe" le comportement du
@@ -92,6 +93,93 @@ class OpenAiService {
           let result;
           try {
             const impl = magentoToolImplementations[fnName];
+            if (!impl) throw new Error(`Fonction inconnue: ${fnName}`);
+            result = await impl(args);
+          } catch (error) {
+            // On ne casse jamais la conversation : on renvoie l'erreur
+            // au modèle sous forme de texte, il saura la gérer/reformuler.
+            result = { error: true, message: error.message || 'Erreur inconnue.' };
+          }
+
+          // Réponse de l'outil réinjectée dans la conversation
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(result ?? null)
+          });
+        }
+
+        // On reboucle : on renvoie tout au modèle pour qu'il continue
+        // (soit un nouvel appel d'outil, soit la réponse finale)
+        continue;
+      }
+
+      // Cas 2 : réponse finale en texte, on sort de la boucle
+      const finalHistory = [...history, { role: 'user', content: userMessage }, assistantMessage];
+      return { reply: assistantMessage.content, history: finalHistory };
+    }
+
+    // Garde-fou si jamais le modèle boucle trop sur des appels d'outils
+    return {
+      reply:
+        "Je rencontre une difficulté à traiter votre demande automatiquement. Un conseiller va prendre le relais.",
+      history: [...history, { role: 'user', content: userMessage }]
+    };
+  }
+
+  /**
+   * Point d'entrée principal du chatbot.
+   *
+   * @param {Array} history - historique de conversation déjà existant,
+   *   au format OpenAI: [{ role: 'user'|'assistant'|'system', content: '...' }, ...]
+   *   (NE PAS inclure le system prompt ici, il est ajouté automatiquement)
+   * @param {string} userMessage - nouveau message du client
+   * @returns {Promise<{ reply: string, history: Array }>}
+   */
+  async prestashopchat(history = [], userMessage) {
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...history,
+      { role: 'user', content: userMessage }
+    ];
+
+    // Boucle de function calling : le modèle peut demander plusieurs
+    // appels d'outils successifs avant de donner sa réponse finale.
+    const MAX_TOOL_ROUNDS = 5;
+    let round = 0;
+
+    while (round < MAX_TOOL_ROUNDS) {
+      round++;
+
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages,
+        tools: prestashopToolDefinitions,
+        tool_choice: 'auto',
+        temperature: 0.3 // bas = réponses plus factuelles, moins créatives (important pour du SAV)
+      });
+
+      const choice = response.choices[0];
+      const assistantMessage = choice.message;
+
+      // Cas 1 : le modèle veut appeler un ou plusieurs outils
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        // On ajoute le message assistant (avec ses tool_calls) à l'historique
+        messages.push(assistantMessage);
+
+        // On exécute chaque appel d'outil demandé
+        for (const toolCall of assistantMessage.tool_calls) {
+          const fnName = toolCall.function.name;
+          let args = {};
+          try {
+            args = JSON.parse(toolCall.function.arguments || '{}');
+          } catch (e) {
+            args = {};
+          }
+
+          let result;
+          try {
+            const impl = prestashopToolImplementations[fnName];
             if (!impl) throw new Error(`Fonction inconnue: ${fnName}`);
             result = await impl(args);
           } catch (error) {

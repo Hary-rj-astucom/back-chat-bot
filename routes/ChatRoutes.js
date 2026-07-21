@@ -3,10 +3,13 @@ const chatController = require('../controllers/chatController');
 
 const router = express.Router();
 
-// POST /api/chat  { sessionId, message } -> { reply }
+// POST /chat/magento  { sessionId, message } -> { reply }
 router.post('/magento', chatController.postMagentoMessage);
 
-// DELETE /api/chat/:sessionId -> réinitialise l'historique de la session
+// POST /chat/prestashop  { sessionId, message } -> { reply }
+router.post('/prestashop', chatController.postPrestashopMessage);
+
+// DELETE /chat/:sessionId -> réinitialise l'historique de la session
 router.delete('/:sessionId', chatController.resetConversation);
 
 module.exports = router;
