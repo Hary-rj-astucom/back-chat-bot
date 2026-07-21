@@ -32,6 +32,21 @@
   </div>
 
   <!-- ==== C'est la SEULE ligne à copier sur un vrai site ==== --> <!-- ici la personne est connecter car le data-customer-email est reseigne -->
+
+  <!--
+    // Pour la recuperation de l'email sur Magento
+    <?php 
+      if ($block->getCustomer()) {
+        $email = $block->getCustomer()->getEmail();
+      }
+    ?>
+
+    //injection dans le script
+    <script
+      data-customer-email="<?= $block->escapeHtmlAttr($email) ?>">
+    </script> 
+  -->
+
   <script
     src="./sav-widget.js"
     data-api-url="http://localhost:3001"
