@@ -61,8 +61,8 @@
   // 2. Session (persistée en localStorage pour garder le fil
   //    de la conversation entre deux visites)
   // ------------------------------------------------------------
-  var STORAGE_SESSION_KEY = 'sav_widget_session_id';
-  var STORAGE_HISTORY_KEY = 'sav_widget_history';
+  var STORAGE_SESSION_KEY = 'sav_widget_session_id_' + config.projet;
+  var STORAGE_HISTORY_KEY = 'sav_widget_history_' + config.projet;
 
   function uuid() {
     if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
@@ -77,12 +77,12 @@
     try {
       var id = localStorage.getItem(STORAGE_SESSION_KEY);
       if (!id) {
-        id = uuid();
+        id = config.projet + '_' + uuid();
         localStorage.setItem(STORAGE_SESSION_KEY, id);
       }
       return id;
     } catch (e) {
-      return uuid(); // localStorage indisponible (mode privé, etc.)
+      return config.projet + '_' + uuid(); // localStorage indisponible (mode privé, etc.)
     }
   }
 
