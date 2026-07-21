@@ -20,6 +20,8 @@
  */
 
 const magentoService = require('../services/MagentoApiService');
+const ShippingboApiService = require('../services/ShippingboApiService');
+const shippingbo = new ShippingboApiService();
 
 const LIST_LIMIT_SCHEMA = {
   type: 'integer',
@@ -262,6 +264,22 @@ const magentoToolDefinitions = [
       description: "Donne les horaires d'ouverture du magasin/service client.",
       parameters: { type: 'object', properties: {} }
     }
+  },
+
+  // fonction issue de shippingbo
+  {
+    type: 'function',
+    function: {
+      name: 'get_order_shippinbo_info_by_reference',
+      description: "Retourne tout ce qui est processus de preparation jusqu'a livraison de la commande à partir de son numéro visible par le client. Information visible depuis shippingbo",
+      parameters: {
+        type: 'object',
+        properties: {
+          reference: { type: 'string', description: 'Le numero de commande visible par le client' }
+        },
+        required: ['reference']
+      }
+    }
   }
 ];
 
@@ -294,7 +312,10 @@ const magentoToolImplementations = {
   get_product_stock: (args) => magentoService.get_product_stock(args.sku),
   get_return_policy: () => magentoService.get_return_policy(),
   get_contact_information: () => magentoService.get_contact_information(),
-  get_store_hours: () => magentoService.get_store_hours()
+  get_store_hours: () => magentoService.get_store_hours(),
+
+  // fonction issue de shippingbo
+  get_order_shippinbo_info_by_reference: (args) => shippingbo.getOrderByReference(args.reference),
 };
 
 module.exports = { magentoToolDefinitions, magentoToolImplementations };
