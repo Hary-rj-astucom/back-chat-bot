@@ -1,3 +1,5 @@
+-- new table in cosmia --
+
 CREATE TABLE conversation_chat(
     id INT PRIMARY KEY auto_increment,
     session_id VARCHAR(200) NOT NULL,
@@ -14,4 +16,24 @@ CREATE TABLE message_chat(
     message TEXT,
     date_created DATETIME NOT NULL DEFAULT NOW(),
     FOREIGN KEY (conversation_chat_id) REFERENCES conversation_chat(id)
+);
+
+-- old table in cosmia --
+CREATE TABLE ticket (
+    id INT PRIMARY KEY auto_increment,
+    num_ticket VARCHAR(45) NOT NULL,
+    subject_ticket VARCHAR(255) NOT NULL,
+    conversation_email_id TEXT NOT NULL,
+    conversation_chat_id INT DEFAULT NULL, -- nouvel colonne
+    to_do TEXT NOT NULL,
+    original_client_mail VARCHAR(45) NOT NULL,
+    reception_mail VARCHAR(45) NOT NULL
+    nom_client VARCHAR(45) DEFAULT NULL,
+    num_commande VARCHAR(45) NOT NULL,
+    label_id INT NOT NULL,
+    project_id INT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT NOW(),
+    status ENUM ('en attente', 'en cours', 'cloture') DEFAULT 'en attente',
+    need_attention TINYINT NOT NULL DEFAULT 0 ; 
+    state INT NOT NULL DEFAULT 1
 );

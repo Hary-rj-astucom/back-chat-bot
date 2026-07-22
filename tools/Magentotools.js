@@ -280,6 +280,23 @@ const magentoToolDefinitions = [
         required: ['reference']
       }
     }
+  },
+
+  // fonction specialiser pour creer un facture en pdf
+  {
+    type: 'function',
+    function: {
+      name: 'get_invoice_PDF',
+      description: "Cette fonction retourne un lien permettant de télécharger la facture d'une commande Magento. Elle doit être appelée lorsque le client demande sa facture.",
+      parameters: {
+        type: 'object',
+        properties: {
+          orderNumber: { type: 'string', description: 'Le numero de commande visible par le client' },
+          langue: { type: 'string', description: 'Le language utilisé par le client' }
+        },
+        required: ['orderNumber', 'langue']
+      }
+    }
   }
 ];
 
@@ -316,6 +333,9 @@ const magentoToolImplementations = {
 
   // fonction issue de shippingbo
   get_order_shippinbo_info_by_reference: (args) => shippingbo.getOrderByReference(args.reference),
+
+  // generation de facture
+  get_invoice_PDF: (args) => magentoService.getInvoicePDF(args.orderNumber, args.langue),
 };
 
 module.exports = { magentoToolDefinitions, magentoToolImplementations };

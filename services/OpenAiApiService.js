@@ -9,8 +9,8 @@ const { prestashopToolDefinitions, prestashopToolImplementations } = require('..
 // ce qu'il doit vérifier avant de répondre, et le ton.
 // ------------------------------------------------------------
 const SYSTEM_PROMPT = `
-Tu es l'assistant du Service Après-Vente (SAV) de la boutique en ligne.
-Tu réponds aux clients en français, avec un ton professionnel, chaleureux et concis.
+Tu es l'assistant du Service Après-Vente (SAV) de la boutique en ligne de parfum, maquillage, soin et tout ce qui est produit de beauté.
+Tu réponds aux clients avec le language qu'ils utilisent, avec un ton professionnel, chaleureux et concis.
 
 Règles :
 1. Tu ne dois JAMAIS inventer d'informations (statut de commande, stock, prix, délais...).
@@ -163,6 +163,79 @@ class OpenAiService {
       history: [...history, { role: 'user', content: userMessage }]
     };
   }
+
+  /**
+   * Translation
+  */
+  buildTranslatorInstructions({
+    target = 'fr',
+    formality = 'courtois', // "formal" | "informal" | "neutral" | "courtois"
+    domain = null,
+    preserve = ['markdown', 'html', 'placeholders'],
+    glossary = {},
+  } = {}) {
+    const preserveHints = {
+      markdown: 'Préserve **strictement** la structure Markdown.',
+      html: 'Préserve **strictement** les balises HTML et attributs.',
+      placeholders: 'Préserve les variables/placeholder ({{name}}, %s, etc.).',
+    };
+
+    const preserveText = preserve
+      .filter(k => preserveHints[k])
+      .map(k => `- ${preserveHints[k]}`)
+      .join('\n');
+
+    const glossaryLines = Object.entries(glossary)
+      .map(([src, tgt]) => `- "${src}" → "${tgt}"`)
+      .join('\n') || '- (aucun)';
+
+    // Ajustement pour la "courtoisie"
+    let formalityText;
+    switch (formality) {
+      case 'formal':
+        formalityText = 'Langage formel, professionnel.';
+        break;
+      case 'informal':
+        formalityText = 'Langage informel, amical.';
+        break;
+      case 'courtois':
+        formalityText = 'Langage courtois, poli et respectueux (comme dans une correspondance professionnelle soignée).';
+        break;
+      default:
+        formalityText = 'Langage neutre.';
+    }
+
+    const domainNote = domain
+      ? `Adapte la terminologie au domaine: **${domain}**.`
+      : 'Adapte la terminologie au contexte général.';
+
+    return `
+        Tu es un traducteur professionnel.
+        - Détecte automatiquement la langue source.
+        - Traduction cible: **${target}**.
+        - Niveau de langage: **${formalityText}**
+        - ${domainNote}
+        - Préservation de format :
+        ${preserveText || '- (aucune)'}
+        - Glossaire :
+        ${glossaryLines}
+      `.trim();
+  }
+
+  async translate(text, options = {}) {
+    if (!text) throw new Error('No text provided for translation');
+
+    const instructions = this.buildTranslatorInstructions(options);
+
+    const response = await this.client.responses.create({
+      model: this.model,
+      instructions,
+      input: [{ role: 'user', content: text }],
+    });
+
+    return response.output_text ?? '';
+  }
+
 }
 
 module.exports = OpenAiService;

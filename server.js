@@ -12,7 +12,12 @@ const port = process.env.PORT;
 app.use(cors());
 app.use(express.json())
 
+// les contenue public
+app.use('/public/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
+// bulle du chatbot dans le dossier widget
 app.use(express.static(path.join(__dirname, 'widget')));
+
 app.use('/chat', chatroute);
 
 // Start the server
