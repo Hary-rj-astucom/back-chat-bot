@@ -16,6 +16,7 @@
  */
 
 const prestashopService = require('../services/PrestashopApiService');
+const ticketService = require('../services/TicketService');
 const ShippingboApiService = require('../services/ShippingboApiService');
 const shippingbo = new ShippingboApiService();
 
@@ -237,6 +238,30 @@ const prestashopToolDefinitions = [
       }
     }
   },
+
+  // fonction specialiser dans la creation du ticket
+  {
+    type: 'function',
+    function: {
+      name: 'create_ticket',
+      description: "Cree un ticket dans la base de données quand le client demande une assistance physique ou de resoudre un probleme dans le categorie de massage",
+      parameters: {
+        type: 'object',
+        properties: {
+          project_id: { type: 'integer', description: 'ID du projet dans la base de donnees.' }, 
+          subject_ticket: { type: 'string', description: 'Le sujet qui englobe le probleme du client' }, 
+          conversation_session_id: { type: 'string', description: 'la session_id de la conversation. Si il n\'y a pas mettre "null" ' }, 
+          to_do: { type: 'string', description: 'Une description du probleme du client apres analyse de la conversation' }, 
+          original_client_mail: { type: 'string', description: 'L\'email du client' }, 
+          reception_mail: { type: 'string', description: 'le mail du service client' }, 
+          nom_client: { type: 'string', description: 'Le nom du client' }, 
+          num_commande: { type: 'string', description: 'Le numero de commande visible par le client. Si il n\'y a pas mettre "inconnu"' }, 
+          label_id: { type: 'integer', description: 'Le numero  de la categorie issue de la classification de la conversation' }
+        },
+        required: ['subject_ticket', 'conversation_session_id', 'to_do', 'original_client_mail', 'nom_client', 'num_commande', 'label_id']
+      }
+    }
+  },
 ];
 
 // ------------------------------------------------------------
@@ -261,6 +286,9 @@ const prestashopToolImplementations = {
 
   // fonction issue de shippingbo
   get_order_shippinbo_info_by_reference: (args) => shippingbo.getOrderByReference(args.reference),
+
+  // creation de ticket 
+  create_ticket: (args) => ticketService.create_ticket(3, args.subject_ticket, args.conversation_session_id, args.to_do, args.original_client_mail, "contact@digiparf.com", args.nom_client, args.num_commande || "inconnu", args.label_id),
 };
 
 module.exports = { prestashopToolDefinitions, prestashopToolImplementations };

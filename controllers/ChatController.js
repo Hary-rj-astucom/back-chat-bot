@@ -17,7 +17,7 @@ const MAX_HISTORY_LENGTH = 20;
 function extractCustomerContext(body) {
   const { customerEmail } = body || {};
   const isValidEmail = typeof customerEmail === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail);
-  return isValidEmail ? { customerEmail: customerEmail.trim() } : {};
+  return isValidEmail ? { customerEmail: customerEmail.trim(), conversation_session_id: body.sessionId } : {};
 }
 
 async function postMagentoMessage(req, res) {
