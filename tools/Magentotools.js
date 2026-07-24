@@ -201,7 +201,7 @@ const magentoToolDefinitions = [
     function: {
       name: 'search_products',
       description:
-        "Recherche des produits par mot-clé dans le nom, triés par nom. Retourne au maximum 10 résultats.",
+        "Recherche des produits par mot-clé dans le nom, le SKU et la description, triés par nom. Retourne au maximum 10 résultats. Pour une recherche combinant plusieurs critères précis (genre, famille olfactive, catégorie), préfère search_products_advanced.",
       parameters: {
         type: 'object',
         properties: {
@@ -209,6 +209,24 @@ const magentoToolDefinitions = [
           limit: LIST_LIMIT_SCHEMA
         },
         required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_products_advanced',
+      description:
+        "Recherche des produits en combinant plusieurs critères structurés (genre, famille olfactive, catégorie) en plus d'un mot-clé optionnel. À utiliser en priorité pour des demandes du type 'parfum pour homme avec une senteur agrume', où un simple mot-clé ne suffit pas à trouver le bon produit. Retourne au maximum 10 résultats.",
+      parameters: {
+        type: 'object',
+        properties: {
+          keyword: { type: 'string', description: "Mot-clé optionnel (nom, marque...) à combiner avec les autres critères." },
+          gender: { type: 'string', description: "Genre du produit recherché, ex: 'homme', 'femme', 'mixte'." },
+          scentFamily: { type: 'string', description: "Famille olfactive recherchée, ex: 'agrumes', 'boisé', 'floral', 'oriental'." },
+          categoryId: { type: 'string', description: "ID de catégorie Magento, si connu." },
+          limit: LIST_LIMIT_SCHEMA
+        }
       }
     }
   },
@@ -380,6 +398,17 @@ const magentoToolImplementations = {
 
   search_products: (args) =>
     magentoService.search_products(args.query, { pageSize: args.limit }),
+
+  search_products_advanced: (args) =>
+    magentoService.search_products_advanced(
+      {
+        keyword: args.keyword,
+        gender: args.gender,
+        scentFamily: args.scentFamily,
+        categoryId: args.categoryId
+      },
+      { pageSize: args.limit }
+    ),
 
   get_product: (args) => magentoService.get_product(args.sku),
   get_product_stock: (args) => magentoService.get_product_stock(args.sku),

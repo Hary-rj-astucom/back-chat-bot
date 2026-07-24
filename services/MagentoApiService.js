@@ -349,16 +349,25 @@ async function get_credit_memo(orderId) {
 // ============================================================
 
 // Recherche de produits par mot-clé.
-// -> Cherche chaque mot significatif de la requête dans "name" OU "sku",
-//    avec et sans accents, et exige que TOUS les mots soient trouvés
-//    (potentiellement dans des champs différents). Corrige les cas où
-//    une recherche par marque seule ("Hermès") ou sans accent ("Hermes")
-//    ne remontait rien alors que le nom complet du produit matchait.
+// -> Cherche chaque mot significatif de la requête dans "name", "sku",
+//    "description" et "short_description", avec et sans accents, et
+//    exige que TOUS les mots soient trouvés (potentiellement dans des
+//    champs différents). Corrige les cas où une recherche par marque
+//    seule ("Hermès") ou sans accent ("Hermes") ne remontait rien alors
+//    que le nom complet du produit matchait, et couvre aussi les
+//    critères qui n'apparaissent que dans la description (ex: "senteur
+//    agrume") plutôt que dans le nom.
+// ⚠️ Si l'un de ces champs n'est pas filtrable côté Magento sur ton
+//    instance (attribut non indexé/non "used in filterable in grid"),
+//    tu auras une erreur explicite du type "Unable to filter by this
+//    field" — retire-le alors du tableau SEARCH_FIELDS ci-dessous.
 // -> pagination et tri désormais TOUJOURS appliqués (5 par défaut, 10 max)
+const SEARCH_FIELDS = ['name', 'sku', 'description', 'short_description'];
+
 async function search_products(query, options = {}) {
   try {
     const normalized = normalizeListOptions(options, { sortField: 'name' });
-    const filterGroups = buildKeywordFilterGroups(query, ['name', 'sku']);
+    const filterGroups = buildKeywordFilterGroups(query, SEARCH_FIELDS);
     const qs = buildSearchCriteria(filterGroups, normalized);
     const { data } = await magento.get(`/products?${qs}`);
     return data.items || [];
@@ -373,6 +382,83 @@ async function get_product(sku) {
     return data;
   } catch (error) {
     handleError('get_product', error);
+  }
+}
+
+// ------------------------------------------------------------
+// OUTIL DE DÉCOUVERTE (usage développeur uniquement, PAS un tool IA) :
+// liste tous les attributs produit disponibles avec leur code exact.
+// Utile pour trouver le vrai code de "genre", "famille olfactive", etc.
+// À exécuter une fois (ex: dans un script ou une route temporaire) :
+//   const { list_searchable_attributes } = require('./MagentoApiService');
+//   list_searchable_attributes().then(r => console.log(r));
+// ------------------------------------------------------------
+async function list_searchable_attributes() {
+  try {
+    const qs = buildSearchCriteria([], { pageSize: 200 });
+    const { data } = await magento.get(`/products/attributes?${qs}`);
+    return (data.items || []).map((a) => ({
+      code: a.attribute_code,
+      label: a.default_frontend_label,
+      type: a.frontend_input, // 'select', 'multiselect', 'text'...
+      options: a.options?.filter((o) => o.value !== '').map((o) => ({ value: o.value, label: o.label }))
+    }));
+  } catch (error) {
+    handleError('list_searchable_attributes', error);
+  }
+}
+
+// ------------------------------------------------------------
+// Recherche PAR ATTRIBUTS structurés (genre, famille olfactive,
+// catégorie...), à la différence de search_products qui ne fait que
+// du mot-clé dans du texte libre.
+//
+// ⚠️ À ADAPTER avant utilisation : remplace 'ATTR_GENRE' et
+// 'ATTR_FAMILLE_OLFACTIVE' par les vrais attribute_code de ton
+// catalogue (trouvables via list_searchable_attributes() ci-dessus).
+//
+// ⚠️ IMPORTANT : si l'attribut est de type "select"/"multiselect"
+// (ce qui est très probable pour genre/famille olfactive), Magento
+// stocke en base l'ID de l'option, pas le libellé texte. Un filtre
+// eq/like sur "agrume" ne matchera donc RIEN si la vraie valeur
+// stockée est "12". Dans ce cas, utilise `options` renvoyées par
+// list_searchable_attributes() pour convertir le libellé choisi par
+// le client (ex: "agrume") vers l'ID d'option correspondant AVANT
+// de construire le filtre.
+//
+// criteria = { keyword, gender, scentFamily, categoryId }
+// ------------------------------------------------------------
+async function search_products_advanced(criteria = {}, options = {}) {
+  try {
+    const normalized = normalizeListOptions(options, { sortField: 'name' });
+    const filterGroups = [];
+
+    if (criteria.keyword) {
+      filterGroups.push(...buildKeywordFilterGroups(criteria.keyword, SEARCH_FIELDS));
+    }
+
+    if (criteria.gender) {
+      // TODO: remplacer 'ATTR_GENRE' par le vrai attribute_code, et
+      // 'eq' par la vraie valeur/ID d'option si c'est un select.
+      filterGroups.push([{ field: 'ATTR_GENRE', value: criteria.gender, condition_type: 'eq' }]);
+    }
+
+    if (criteria.scentFamily) {
+      // TODO: remplacer 'ATTR_FAMILLE_OLFACTIVE' par le vrai attribute_code.
+      filterGroups.push([{ field: 'ATTR_FAMILLE_OLFACTIVE', value: criteria.scentFamily, condition_type: 'eq' }]);
+    }
+
+    if (criteria.categoryId) {
+      // Filtrer par catégorie fonctionne nativement sur /V1/products
+      // via le champ virtuel "category_id".
+      filterGroups.push([{ field: 'category_id', value: criteria.categoryId, condition_type: 'eq' }]);
+    }
+
+    const qs = buildSearchCriteria(filterGroups, normalized);
+    const { data } = await magento.get(`/products?${qs}`);
+    return data.items || [];
+  } catch (error) {
+    handleError('search_products_advanced', error);
   }
 }
 
@@ -1475,6 +1561,8 @@ module.exports = {
 
   // Produits
   search_products,
+  search_products_advanced,
+  list_searchable_attributes,
   get_product,
   get_product_by_name,
   get_product_price,
