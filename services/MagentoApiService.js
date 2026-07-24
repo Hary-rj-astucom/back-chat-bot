@@ -81,6 +81,59 @@ function normalizeListOptions(options = {}, defaults = {}) {
   };
 }
 
+/**
+ * Retire les accents/diacritiques d'une chaîne ("Hermès" -> "Hermes").
+ * Utilisé pour construire des filtres tolérants aux accents, car selon
+ * la collation MySQL utilisée par l'instance Magento, une recherche
+ * LIKE peut être sensible aux accents (ce qui donne 0 résultat pour
+ * "Hermes" alors que le produit s'appelle "Hermès").
+ */
+function stripDiacritics(str) {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * Construit des filter_groups "mots-clés" à partir d'une requête libre.
+ * Principe : on découpe la requête en mots significatifs (on ignore la
+ * ponctuation et les mots vides comme "de", "le", "pour"...), et pour
+ * CHAQUE mot on exige qu'il soit trouvé dans AU MOINS un des champs
+ * fournis (`fields`), avec ou sans accents.
+ *
+ * -> Un groupe par mot (OR entre les variantes/champs du mot),
+ *    les groupes étant AND-és entre eux par Magento : tous les mots
+ *    doivent être trouvés quelque part, mais pas forcément au même
+ *    endroit ni dans le même ordre. Ça couvre aussi bien une recherche
+ *    par marque seule ("Hermès") qu'un nom de produit complet
+ *    ("Terre d'Hermès").
+ */
+const SEARCH_STOP_WORDS = new Set([
+  'de', 'du', 'des', 'le', 'la', 'les', 'un', 'une', 'et', 'ou', 'pour', 'avec', 'a', 'au'
+]);
+const MAX_SEARCH_WORDS = 4;
+
+function buildKeywordFilterGroups(query, fields) {
+  const cleaned = String(query || '').replace(/[?!.,;:()"']/g, ' ');
+  const rawWords = cleaned
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2 && !SEARCH_STOP_WORDS.has(w.toLowerCase()));
+
+  const words = (rawWords.length > 0 ? rawWords : [cleaned.trim()])
+    .filter(Boolean)
+    .slice(0, MAX_SEARCH_WORDS);
+
+  return words.map((word) => {
+    const variants = new Set([word, stripDiacritics(word)]);
+    const filters = [];
+    variants.forEach((variant) => {
+      fields.forEach((field) => {
+        filters.push({ field, value: `%${variant}%`, condition_type: 'like' });
+      });
+    });
+    return filters;
+  });
+}
+
 function handleError(context, error) {
   console.error(`Erreur_Magento [${context}]:`, error.response?.data || error.message);
   throw error;
@@ -295,15 +348,18 @@ async function get_credit_memo(orderId) {
 // PRODUITS (Products)
 // ============================================================
 
-// Recherche de produits par mot-clé (sur le nom)
+// Recherche de produits par mot-clé.
+// -> Cherche chaque mot significatif de la requête dans "name" OU "sku",
+//    avec et sans accents, et exige que TOUS les mots soient trouvés
+//    (potentiellement dans des champs différents). Corrige les cas où
+//    une recherche par marque seule ("Hermès") ou sans accent ("Hermes")
+//    ne remontait rien alors que le nom complet du produit matchait.
 // -> pagination et tri désormais TOUJOURS appliqués (5 par défaut, 10 max)
 async function search_products(query, options = {}) {
   try {
     const normalized = normalizeListOptions(options, { sortField: 'name' });
-    const qs = buildSearchCriteria(
-      [[{ field: 'name', value: `%${query}%`, condition_type: 'like' }]],
-      normalized
-    );
+    const filterGroups = buildKeywordFilterGroups(query, ['name', 'sku']);
+    const qs = buildSearchCriteria(filterGroups, normalized);
     const { data } = await magento.get(`/products?${qs}`);
     return data.items || [];
   } catch (error) {
@@ -480,14 +536,14 @@ async function search_brand(brand, attributeCode = 'manufacturer', options = {})
 async function get_store_information() {
   try {
     const data = `Créée en 1977, Cosma Parfumeries est une parfumerie indépendante dont le magasin historique était situé en région parisienne à Rueil Malmaison (92500).
-      Nos équipes mettent depuis toujours un point d’honneur à vous accueillir en ligne avec la même rigueur et le même professionnalisme que dans les points de vente physiques vous faisant ainsi bénéficier de leurs expériences, conseils et suivis personnalisés. 
+      Nos équipes mettent depuis toujours un point d'honneur à vous accueillir en ligne avec la même rigueur et le même professionnalisme que dans les points de vente physiques vous faisant ainsi bénéficier de leurs expériences, conseils et suivis personnalisés. 
       Forte du soutien indéfectible de sa clientèle (5 étoiles notamment sur Truspilot) et Dépositaire agréé des plus grandes marques de parfumerie, Cosma Parfumeries accélère désormais son développement en multipliant les ouvertures de boutiques et en diffusant désormais ses produits dans les principaux pays européens.
       Cette croissance nous permettra de continuer à vous offrir les meilleurs produits au plus juste prix.
       
-      Retrouvez ainsi dans la rubrique «parfums» du site, les toutes dernières nouveautés, les bons plans Cosma et surtout, les plus grandes marques ! Dior, Guerlain, Hermès, Yves Saint Laurent, Paco Rabanne, Jean-Paul Gaultier, Lancôme… Les parfums best-sellers comme Angel, La Vie est belle, La Petite Robe Noire, Black Opium, 1 Million, Sauvage, La Nuit de l’Homme, Wanted.
+      Retrouvez ainsi dans la rubrique «parfums» du site, les toutes dernières nouveautés, les bons plans Cosma et surtout, les plus grandes marques ! Dior, Guerlain, Hermès, Yves Saint Laurent, Paco Rabanne, Jean-Paul Gaultier, Lancôme… Les parfums best-sellers comme Angel, La Vie est belle, La Petite Robe Noire, Black Opium, 1 Million, Sauvage, La Nuit de l'Homme, Wanted.
       Elles sont toutes là et à prix compétitif !
-      Également, l’espace maquillage et soins pourront vous permettre de mettre en valeur votre visage et votre corps à travers les plus grandes gammes de cosmétiques. Clarins, Revlon ou encore Pupa sauront vous satisfaire ! Que ce soit pour un fond de teint, un eyeliner, un crayon, un mascara ou encore un anticernes, nous vous proposons là aussi les marques les plus réputées en parfumerie.
-      Et pour finir, une fois votre choix fait, il ne vous restera plus qu’à commander en quelques clics et nous prendrons le relais pour vous faire parvenir votre commande dans les meilleurs délais !
+      Également, l'espace maquillage et soins pourront vous permettre de mettre en valeur votre visage et votre corps à travers les plus grandes gammes de cosmétiques. Clarins, Revlon ou encore Pupa sauront vous satisfaire ! Que ce soit pour un fond de teint, un eyeliner, un crayon, un mascara ou encore un anticernes, nous vous proposons là aussi les marques les plus réputées en parfumerie.
+      Et pour finir, une fois votre choix fait, il ne vous restera plus qu'à commander en quelques clics et nous prendrons le relais pour vous faire parvenir votre commande dans les meilleurs délais !
       Pour en savoir plus, suivez-nous sur Facebook, Instagram ! `;
     return data;
   } catch (error) {
@@ -545,7 +601,7 @@ async function get_terms() {
     Avant de passer commande, l'Utilisateur déclare que l'achat de produits sur le Site n'est pas directement lié à son activité professionnelle et est limité à un usage strictement personnel.
 
     Article 1 : Objet
-    Les présentes conditions générales ont pour objet de définir les droits et obligations de la Société et de l'Utilisateur nés de l’accès au Site et de la vente en ligne des Produits proposés sur le Site, exclusivement dans le cadre des relations qu'ils établissent sur le réseau Internet et uniquement sur le Site. Ces conditions s'appliquent à l'exclusion de tout autre document. Dès lors qu’une disposition des Conditions Générales serait déclarée nulle et non avenue, les autres dispositions des Conditions Générales resteront en vigueur et de plein effet.
+    Les présentes conditions générales ont pour objet de définir les droits et obligations de la Société et de l'Utilisateur nés de l'accès au Site et de la vente en ligne des Produits proposés sur le Site, exclusivement dans le cadre des relations qu'ils établissent sur le réseau Internet et uniquement sur le Site. Ces conditions s'appliquent à l'exclusion de tout autre document. Dès lors qu'une disposition des Conditions Générales serait déclarée nulle et non avenue, les autres dispositions des Conditions Générales resteront en vigueur et de plein effet.
 
     Article 2 : Produits vendus
     www.cosma-parfumeries.com est un site de vente en ligne de parfums, de cosmétiques et de maquillage. La Société s'approvisionne en Produits auprès de fabricants qui ont expressément accepté d'être référencés sur le Site. La Société se réserve expressément le droit à tout moment d'ajouter de nouveaux Produits, de supprimer tout ou partie des Produits vendus ou présentés sur le Site, de modifier leur présentation ou de cesser leur commercialisation sur son Site, sans être tenue d'en informer préalablement l'Utilisateur.
@@ -570,9 +626,9 @@ async function get_terms() {
     Toute modification de la commande demandée par l'Acheteur ne peut être prise en considération que si elle est parvenue à la Société par courrier électronique à contact@cosma-parfumeries.fr avant l'expédition des Produits.
 
     Article 5 : Indisponibilité des produits
-    Les produits sont proposés dans la limite des stocks disponibles. Dans l'éventualité d'une indisponibilité de l'un des Produits après passation de la commande par l’Acheteur, la Société l’en informera et lui proposera le remboursement du Produit ou d’attendre une nouvelle réception fournisseur dudit Produit.
+    Les produits sont proposés dans la limite des stocks disponibles. Dans l'éventualité d'une indisponibilité de l'un des Produits après passation de la commande par l'Acheteur, la Société l'en informera et lui proposera le remboursement du Produit ou d'attendre une nouvelle réception fournisseur dudit Produit.
 
-    Dans l’hypothèse d’une commande comprenant plusieurs produits, la Société procédera à une livraison partielle de la commande des produits commandés disponibles sauf avis contraire immédiat de l’Acheteur.
+    Dans l'hypothèse d'une commande comprenant plusieurs produits, la Société procédera à une livraison partielle de la commande des produits commandés disponibles sauf avis contraire immédiat de l'Acheteur.
     
     Article 6 : Prix - Paiement
     6.1. Prix
@@ -586,7 +642,7 @@ async function get_terms() {
 
     
     6.2. Paiement
-    Les commandes sont payables en euros Toutes Taxes Comprises ou dans la devise locale TTC du pays de livraison. Les éventuels frais bancaires liés à l’achat seront à la charge de l’Acheteur.
+    Les commandes sont payables en euros Toutes Taxes Comprises ou dans la devise locale TTC du pays de livraison. Les éventuels frais bancaires liés à l'achat seront à la charge de l'Acheteur.
 
     Le paiement des Produits s'effectue soit :
 
@@ -600,11 +656,11 @@ async function get_terms() {
 
     - Par Paypal. Les informations financières et personnelles sont automatiquement cryptées lorsque des informations sensibles sont envoyées aux serveurs de PAYPAL.
 
-    - Par virement bancaire. Afin de finaliser le paiement et de traiter la commande, l'Acheteur doit réaliser un virement du montant de sa commande sur le compte bancaire de la Société dont les coordonnées sont communiquées après le passage de la commande en indiquant clairement les références de la commande. Dès réception du virement, la commande sera traitée et l’Acheteur en sera informé par courrier électronique. Le paiement doit être reçu par la Société dans un délai maximum de 10 jours après l'enregistrement de la commande. Passé ce délai de 10 jours, la commande sera annulée.
+    - Par virement bancaire. Afin de finaliser le paiement et de traiter la commande, l'Acheteur doit réaliser un virement du montant de sa commande sur le compte bancaire de la Société dont les coordonnées sont communiquées après le passage de la commande en indiquant clairement les références de la commande. Dès réception du virement, la commande sera traitée et l'Acheteur en sera informé par courrier électronique. Le paiement doit être reçu par la Société dans un délai maximum de 10 jours après l'enregistrement de la commande. Passé ce délai de 10 jours, la commande sera annulée.
 
-    - Apple Pay : Dans cette éventualité, Apple Pay utilise un numéro propre à l’appareil de l’Acheteur et un code de transaction unique (La société ne dispose ainsi jamais des numéros de carte de paiement de l’Acheteur).
+    - Apple Pay : Dans cette éventualité, Apple Pay utilise un numéro propre à l'appareil de l'Acheteur et un code de transaction unique (La société ne dispose ainsi jamais des numéros de carte de paiement de l'Acheteur).
 
-    - Bancontact : Dans cette éventualité, l’Acheteur doit scanner le code QR avec l’application dédiée, et confirmer le montant avec son code PIN, son empreinte digitale ou sa reconnaissance faciale.
+    - Bancontact : Dans cette éventualité, l'Acheteur doit scanner le code QR avec l'application dédiée, et confirmer le montant avec son code PIN, son empreinte digitale ou sa reconnaissance faciale.
 
     - iDeal : Système de paiement par internet utilisé essentiellement aux Pays-Bas.
 
@@ -615,7 +671,7 @@ async function get_terms() {
     
     Article 7 : Livraison
     7.1. Modalités de livraison
-    Si le destinataire est absent lors de la livraison de la commande à domicile, une seconde tentative de livraison sera effectuée. La date de cette nouvelle livraison sera déterminée au choix à l’aide du formulaire notifié par mail ou SMS. En cas de nouvelle absence du destinataire, le colis est déposé en point de retrait et peut être récupéré pendant la période d’instance communiquée par le transporteur. Passé ce délai, la commande sera automatiquement retournée à la Société qui prendra contact avec l'Acheteur pour proposer une réexpédition ou un remboursement de la commande.
+    Si le destinataire est absent lors de la livraison de la commande à domicile, une seconde tentative de livraison sera effectuée. La date de cette nouvelle livraison sera déterminée au choix à l'aide du formulaire notifié par mail ou SMS. En cas de nouvelle absence du destinataire, le colis est déposé en point de retrait et peut être récupéré pendant la période d'instance communiquée par le transporteur. Passé ce délai, la commande sera automatiquement retournée à la Société qui prendra contact avec l'Acheteur pour proposer une réexpédition ou un remboursement de la commande.
 
     
     7.2. Délais de livraison
@@ -625,7 +681,7 @@ async function get_terms() {
 
     Les colis sont pris en charge par les transporteurs entre 14h00 et 16h30, du lundi au vendredi. Les commandes passées après 15h00 du lundi au jeudi seront expédiées dans la mesure du possible le lendemain, et le lundi si la commande est validée le vendredi après 15h00. Le délai de livraison commence le jour où le colis quitte les locaux de la Société.
 
-    La livraison interviendra dans les délais estimatifs indiqués sur l’email de confirmation de commande que la Société aura adressé à l’Acheteur sauf événement indépendant de la volonté de la Société.
+    La livraison interviendra dans les délais estimatifs indiqués sur l'email de confirmation de commande que la Société aura adressé à l'Acheteur sauf événement indépendant de la volonté de la Société.
 
     Les produits seront expédiés par Mondial Relay, La Poste (Colissimo suivi), dans les délais estimatifs de 48 à 72 heures, ou de 24/48 heures pour une livraison par TNT.
 
@@ -661,7 +717,7 @@ async function get_terms() {
 
     L'Acheteur peut exercer son droit de rétractation :
     - soit en répondant à l'e-mail de confirmation de commande envoyé par la Société,
-    - soit à l’aide du formulaire de rétractation prévu par l’article R.221-1 du Code de la Consommation ci-dessous :
+    - soit à l'aide du formulaire de rétractation prévu par l'article R.221-1 du Code de la Consommation ci-dessous :
 
 
     MODÈLE DE FORMULAIRE DE RÉTRACTATION
@@ -695,39 +751,39 @@ async function get_terms() {
     - par courrier électronique à l'adresse suivante : contact@cosma-parfumeries.fr
 
 
-    Si les conditions de la rétractation sont réunies, la Société procèdera au remboursement du Produit retourné par l’Acheteur sur le compte émetteur de l’achat.
+    Si les conditions de la rétractation sont réunies, la Société procèdera au remboursement du Produit retourné par l'Acheteur sur le compte émetteur de l'achat.
 
     
     Article 8 : Garanties légales
     8.1. Garantie légale de conformité
-    Dans l’hypothèse d’une non-conformité du produit réceptionné suite à la commande de l’Acheteur, ce dernier bénéficie de la garantie légale de conformité dans les conditions de l’article L.217-4 et suivants du Code de la consommation.
+    Dans l'hypothèse d'une non-conformité du produit réceptionné suite à la commande de l'Acheteur, ce dernier bénéficie de la garantie légale de conformité dans les conditions de l'article L.217-4 et suivants du Code de la consommation.
 
     En cas de défaut de conformité existant au moment de la délivrance du produit au sens de l'article  L. 216-1 du Code de la consommation, l'Acheteur doit en informer la Société dans le délai de 24 mois suivant la réception de la commande, par e-mail à contact@cosma-parfumeries.fr ou par téléphone au +33(0)1 56 83 84 88.
-    L’Acheteur pourra mettre en œuvre la garantie légale de conformité lorsque le produit est impropre à l’usage habituellement attendu (défaut de fabrication) pour un produit du même type, lorsqu’il présente un défaut d’emballage ou lorsqu’il ne correspond pas à la description mentionnée sur le site de la Société.
+    L'Acheteur pourra mettre en œuvre la garantie légale de conformité lorsque le produit est impropre à l'usage habituellement attendu (défaut de fabrication) pour un produit du même type, lorsqu'il présente un défaut d'emballage ou lorsqu'il ne correspond pas à la description mentionnée sur le site de la Société.
 
-    L’Acheteur transmettra à la Société la preuve de son achat à l’appui de sa demande. Si le défaut de conformité du produit est avéré, l’Acheteur pourra solliciter auprès de la Société la mise en conformité du produit par réparation ou son remplacement. Pour ce faire, l’Acheteur retournera le produit non conforme au frais de la Société qui transmettra un bon de retour à l’Acheteur à cet effet.
+    L'Acheteur transmettra à la Société la preuve de son achat à l'appui de sa demande. Si le défaut de conformité du produit est avéré, l'Acheteur pourra solliciter auprès de la Société la mise en conformité du produit par réparation ou son remplacement. Pour ce faire, l'Acheteur retournera le produit non conforme au frais de la Société qui transmettra un bon de retour à l'Acheteur à cet effet.
 
-    La Société pourra refuser la /mise en conformité sollicitée si celle-ci est impossible ou entraîne des coûts disproportionnés. Le cas échéant, l’Acheteur pourra demander le remplacement du produit non-conforme après réception de ce dernier par la Société.
+    La Société pourra refuser la /mise en conformité sollicitée si celle-ci est impossible ou entraîne des coûts disproportionnés. Le cas échéant, l'Acheteur pourra demander le remplacement du produit non-conforme après réception de ce dernier par la Société.
 
-    Si la réparation est possible, la mise en conformité du produit aura lieu dans le délai de trente jours suivant la réception de la demande de l’acheteur sous réserve de la réception du produit non conforme par la Société.
+    Si la réparation est possible, la mise en conformité du produit aura lieu dans le délai de trente jours suivant la réception de la demande de l'acheteur sous réserve de la réception du produit non conforme par la Société.
 
-    Le produit réparé dans le cadre de la garantie légale de conformité bénéficiera d'une extension de cette garantie d’une durée de six mois.
+    Le produit réparé dans le cadre de la garantie légale de conformité bénéficiera d'une extension de cette garantie d'une durée de six mois.
 
-    Si aucune des solutions envisagées ne peut être mise en œuvre dans le mois suivant la demande de l’Acheteur, ce dernier aura la possibilité de demander une diminution du prix dans les cas prévus à l'article  L. 217-14 du Code de la consommation.
+    Si aucune des solutions envisagées ne peut être mise en œuvre dans le mois suivant la demande de l'Acheteur, ce dernier aura la possibilité de demander une diminution du prix dans les cas prévus à l'article  L. 217-14 du Code de la consommation.
 
-    Dans le cas où le défaut de conformité est mineur, l’Acheteur ne pourra bénéficier du remboursement du prix du produit.
+    Dans le cas où le défaut de conformité est mineur, l'Acheteur ne pourra bénéficier du remboursement du prix du produit.
 
     Dans le cas où la réduction du prix est accordée par la Société, celle-ci sera proportionnelle à la différence entre la valeur du produit délivré et la valeur du produit en l'absence du défaut de conformité.
 
-    Le remboursement accordé la Société sera effectué dès réception du produit non-conforme retourné à l’aide du bon de retour transmis par la Société et au plus tard dans les quatorze jours suivants.
+    Le remboursement accordé la Société sera effectué dès réception du produit non-conforme retourné à l'aide du bon de retour transmis par la Société et au plus tard dans les quatorze jours suivants.
 
     
     8.2. Garantie légale des vices cachés
-    Conformément aux dispositions des articles 1641 et suivants du Code civil, l’Acheteur bénéficie de la garantie légale des vices cachés.
+    Conformément aux dispositions des articles 1641 et suivants du Code civil, l'Acheteur bénéficie de la garantie légale des vices cachés.
 
-    En présence d’un vice caché d’un produit, l'Acheteur doit en informer la Société dans le délai dans le délai de 24 mois suivant la découverte du vice entachant le produit acheté auprès de la Société, par e-mail à contact@cosma-parfumeries.fr ou par téléphone au 01 56 83 84 88.
+    En présence d'un vice caché d'un produit, l'Acheteur doit en informer la Société dans le délai dans le délai de 24 mois suivant la découverte du vice entachant le produit acheté auprès de la Société, par e-mail à contact@cosma-parfumeries.fr ou par téléphone au 01 56 83 84 88.
 
-    L’Acheteur pourra mettre en œuvre la garantie légale des vices cachés si les 3 conditions suivantes sont réunies : 
+    L'Acheteur pourra mettre en œuvre la garantie légale des vices cachés si les 3 conditions suivantes sont réunies : 
 
     - Le défaut doit être un défaut caché, c'est-à-dire non apparent lors de l'achat,
 
@@ -736,13 +792,13 @@ async function get_terms() {
     - Le défaut doit exister au moment de l'achat.
 
 
-    L’Acheteur transmettra à la Société la preuve de son achat à l’appui de sa demande ainsi toutes preuves démontrant que le défaut rend le produit impropre à l’usage auquel on le destine ou le diminue fortement en produisant des photographies de toutes les faces du produit et de son emballage.
+    L'Acheteur transmettra à la Société la preuve de son achat à l'appui de sa demande ainsi toutes preuves démontrant que le défaut rend le produit impropre à l'usage auquel on le destine ou le diminue fortement en produisant des photographies de toutes les faces du produit et de son emballage.
 
     Pour tout article comportant un vice caché, la procédure se fera directement auprès du fabricant du produit ou auprès de la Société selon le produit concerné, qui se chargera de l'échange de la marchandise après analyse, si le vice caché du produit est confirmé par le fabricant. La Société ne pourra voir sa responsabilité engagée à ce titre et ne sera pas tenue de rembourser l'Acheteur.
 
-    Sous réserve de l’apport de ces preuves, l’Acheteur pourra choisir entre la résolution de la vente ou une réduction du prix de vente, conformément à l’article 1644 du code civil.
+    Sous réserve de l'apport de ces preuves, l'Acheteur pourra choisir entre la résolution de la vente ou une réduction du prix de vente, conformément à l'article 1644 du code civil.
 
-    Ces dispositions ne sont pas exclusives du droit de rétraction défini à l’article 7.4 ci-dessus.
+    Ces dispositions ne sont pas exclusives du droit de rétraction défini à l'article 7.4 ci-dessus.
 
     
     Article 9 : Informatique et liberté
@@ -769,7 +825,7 @@ async function get_terms() {
     Article 11 : Droit applicable - Litige
     Les présentes conditions générales sont soumises à la loi française. En cas de litige, les tribunaux français seront seuls compétents. Toutefois, une solution amiable sera recherchée avant toute action judiciaire.
 
-    L’Acheteur est informé de la possibilité de recourir, en cas de contestation, à une procédure de médiation conventionnelle en adressant une réclamation écrite au service de médiation FEVAD, pour toute réclamation liée à un achat sur le Site introduite au cours des 12 derniers mois.
+    L'Acheteur est informé de la possibilité de recourir, en cas de contestation, à une procédure de médiation conventionnelle en adressant une réclamation écrite au service de médiation FEVAD, pour toute réclamation liée à un achat sur le Site introduite au cours des 12 derniers mois.
 
     Conformément aux dispositions du Code de la consommation concernant le règlement amiable des litiges, la Société adhère au Service du Médiateur du e-commerce de la FEVAD (Fédération du e-commerce et de la vente à distance) dont les coordonnées sont les suivantes :
 
@@ -781,7 +837,7 @@ async function get_terms() {
 
     https://www.mediateurfevad.fr
 
-    Après démarche préalable écrite de l’Acheteur auprès du service client de la Société, le Service du Médiateur peut être saisi pour tout litige de consommation dont le règlement n’aurait pas abouti.
+    Après démarche préalable écrite de l'Acheteur auprès du service client de la Société, le Service du Médiateur peut être saisi pour tout litige de consommation dont le règlement n'aurait pas abouti.
 
     Pour les livraisons effectuées en Belgique, toute plainte peut également être introduite au service de médiation pour les consommateurs
 
@@ -795,11 +851,11 @@ async function get_terms() {
 
     E-mail : contact@mediationconsommateur.be
 
-    L’Acheteur peut enfin également introduire sa plainte auprès des services de la commissions européenne en utilisant le lien ci-dessous :
+    L'Acheteur peut enfin également introduire sa plainte auprès des services de la commissions européenne en utilisant le lien ci-dessous :
 
     https://ec.europa.eu/consumers/odr/main/?event=main.home.selfTest
 
-    La solution proposée par le Médiateur ne s’impose pas aux Parties, qui restent libres à tout moment de sortir du processus de médiation.
+    La solution proposée par le Médiateur ne s'impose pas aux Parties, qui restent libres à tout moment de sortir du processus de médiation.
 
     
     Article 12 : Modification des conditions générales de vente
@@ -831,7 +887,7 @@ async function get_return_policy() {
   try {
     return `Article 7 : Livraison
       7.1. Modalités de livraison
-      Si le destinataire est absent lors de la livraison de la commande à domicile, une seconde tentative de livraison sera effectuée. La date de cette nouvelle livraison sera déterminée au choix à l’aide du formulaire notifié par mail ou SMS. En cas de nouvelle absence du destinataire, le colis est déposé en point de retrait et peut être récupéré pendant la période d’instance communiquée par le transporteur. Passé ce délai, la commande sera automatiquement retournée à la Société qui prendra contact avec l'Acheteur pour proposer une réexpédition ou un remboursement de la commande.
+      Si le destinataire est absent lors de la livraison de la commande à domicile, une seconde tentative de livraison sera effectuée. La date de cette nouvelle livraison sera déterminée au choix à l'aide du formulaire notifié par mail ou SMS. En cas de nouvelle absence du destinataire, le colis est déposé en point de retrait et peut être récupéré pendant la période d'instance communiquée par le transporteur. Passé ce délai, la commande sera automatiquement retournée à la Société qui prendra contact avec l'Acheteur pour proposer une réexpédition ou un remboursement de la commande.
 
       
       7.2. Délais de livraison
@@ -841,7 +897,7 @@ async function get_return_policy() {
 
       Les colis sont pris en charge par les transporteurs entre 14h00 et 16h30, du lundi au vendredi. Les commandes passées après 15h00 du lundi au jeudi seront expédiées dans la mesure du possible le lendemain, et le lundi si la commande est validée le vendredi après 15h00. Le délai de livraison commence le jour où le colis quitte les locaux de la Société.
 
-      La livraison interviendra dans les délais estimatifs indiqués sur l’email de confirmation de commande que la Société aura adressé à l’Acheteur sauf événement indépendant de la volonté de la Société.
+      La livraison interviendra dans les délais estimatifs indiqués sur l'email de confirmation de commande que la Société aura adressé à l'Acheteur sauf événement indépendant de la volonté de la Société.
 
       Les produits seront expédiés par Mondial Relay, La Poste (Colissimo suivi), dans les délais estimatifs de 48 à 72 heures, ou de 24/48 heures pour une livraison par TNT.
 
@@ -877,7 +933,7 @@ async function get_return_policy() {
 
       L'Acheteur peut exercer son droit de rétractation :
       - soit en répondant à l'e-mail de confirmation de commande envoyé par la Société,
-      - soit à l’aide du formulaire de rétractation prévu par l’article R.221-1 du Code de la Consommation ci-dessous :
+      - soit à l'aide du formulaire de rétractation prévu par l'article R.221-1 du Code de la Consommation ci-dessous :
 
 
       MODÈLE DE FORMULAIRE DE RÉTRACTATION
@@ -911,7 +967,7 @@ async function get_return_policy() {
       - par courrier électronique à l'adresse suivante : contact@cosma-parfumeries.fr
 
 
-      Si les conditions de la rétractation sont réunies, la Société procèdera au remboursement du Produit retourné par l’Acheteur sur le compte émetteur de l’achat.
+      Si les conditions de la rétractation sont réunies, la Société procèdera au remboursement du Produit retourné par l'Acheteur sur le compte émetteur de l'achat.
 
       `;
   } catch (error) {
