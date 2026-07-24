@@ -45,12 +45,10 @@ const magentoToolDefinitions = [
       parameters: {
         type: 'object',
         properties: {
-          orderNumber: {
-            type: 'string',
-            description: "Numéro de commande visible par le client, ex: '000012345'."
-          }
+          orderNumber: { type: 'string', description: "Numéro de commande visible par le client, ex: '000012345'." },
+          email_client: { type: 'string', description: "Email utilise par le client lors de son identification" },
         },
-        required: ['orderNumber']
+        required: ['orderNumber', 'email_client']
       }
     }
   },
@@ -331,7 +329,7 @@ const magentoToolDefinitions = [
 //    (doit correspondre EXACTEMENT aux "name" ci-dessus)
 // ------------------------------------------------------------
 const magentoToolImplementations = {
-  get_order_by_increment_id: (args) => magentoService.get_order_by_increment_id(args.orderNumber),
+  get_order_by_increment_id: (args) => magentoService.get_order_by_increment_id(args.orderNumber, args.email_client),
 
   get_last_orders_by_email: (args) =>
     magentoService.get_last_orders_by_email(args.email, args.limit),

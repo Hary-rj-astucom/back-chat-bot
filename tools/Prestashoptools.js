@@ -65,9 +65,10 @@ const prestashopToolDefinitions = [
       parameters: {
         type: 'object',
         properties: {
-          reference: { type: 'string', description: 'Numéro de référence de commande visible par le client.' }
+          reference: { type: 'string', description: 'Numéro de référence de commande visible par le client.' },
+          email_client: { type: 'string', description: "Email utilise par le client lors de son identification" },
         },
-        required: ['reference']
+        required: ['reference', 'email_client']
       }
     }
   },
@@ -269,7 +270,7 @@ const prestashopToolDefinitions = [
 // ------------------------------------------------------------
 const prestashopToolImplementations = {
   get_orders_by_email: (args) => prestashopService.getOrdersByEmail(args.email, args.limit),
-  get_order_by_reference: (args) => prestashopService.getOrderByReference(args.reference),
+  get_order_by_reference: (args) => prestashopService.getOrderByReference(args.reference, args.email_client),
   get_order_status: (args) => prestashopService.getOrderStatus(args.reference),
   get_order_items: (args) => prestashopService.getOrderItems(args.reference),
   get_order_total: (args) => prestashopService.getOrderTotal(args.reference),

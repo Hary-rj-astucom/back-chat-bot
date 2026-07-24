@@ -101,7 +101,7 @@ async function get_order(orderId) {
 }
 
 // Récupérer une commande par son numéro visible (increment_id)
-async function get_order_by_increment_id(orderNumber) {
+async function get_order_by_increment_id(orderNumber, email_client) {
   try {
     const query = buildSearchCriteria([
       [{ field: 'increment_id', value: orderNumber, condition_type: 'eq' }]
@@ -110,7 +110,14 @@ async function get_order_by_increment_id(orderNumber) {
     if (!data.items || data.items.length === 0) {
       throw new Error(`Commande ${orderNumber} introuvable`);
     }
-    return data.items[0];
+
+    //verication de l'appartenance de l'email
+    if(data.items[0].customer_email == email_client){
+      return data.items[0];
+    }else{
+      return null;
+    }
+    
   } catch (error) {
     handleError('get_order_by_increment_id', error);
   }

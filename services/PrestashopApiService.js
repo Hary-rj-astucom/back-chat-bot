@@ -241,7 +241,7 @@ async function getOrdersByEmail(email, limit = DEFAULT_PAGE_SIZE) {
 
 //avoir les donnees avec les references digiparf:[UCMRBZIYS] - helfrich[OSAQVJDNX] - univercse[JTFRORPVM]
 // (comportement identique à la version précédente, réécrit avec findOrderLocation)
-async function getOrderByReference(reference) {
+async function getOrderByReference(reference, email_client) {
   try {
     const { boutique, apiUrl, orderId } = await findOrderLocation(reference);
 
@@ -252,6 +252,11 @@ async function getOrderByReference(reference) {
     if (order.id_customer) {
       customer = await getCustomerById(apiUrl, order.id_customer);
       console.log(customer ? "✓ Informations client récupérées !" : "⚠️ Impossible de récupérer les infos client");
+    }
+
+    // verification de l'appartenance de la commande
+    if(customer.email != email_client){
+      return {};
     }
 
     let orderState = null;
