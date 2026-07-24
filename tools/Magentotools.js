@@ -264,6 +264,38 @@ const magentoToolDefinitions = [
       parameters: { type: 'object', properties: {} }
     }
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_store_information',
+      description: "Donne la description de la boutique",
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_store_locations',
+      description: "Donne la localisation de la boutique",
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_terms',
+      description: "Avoir les terms et condition general de la boutique en ligne",
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_privacy_policy',
+      description: "Avoir la politique de confidentialite",
+      parameters: { type: 'object', properties: {} }
+    }
+  },
 
   // fonction issue de shippingbo
   {
@@ -351,9 +383,14 @@ const magentoToolImplementations = {
 
   get_product: (args) => magentoService.get_product(args.sku),
   get_product_stock: (args) => magentoService.get_product_stock(args.sku),
+
   get_return_policy: () => magentoService.get_return_policy(),
   get_contact_information: () => magentoService.get_contact_information(),
   get_store_hours: () => magentoService.get_store_hours(),
+  get_store_information: () => magentoService.get_store_information(),
+  get_store_locations: () => magentoService.get_store_locations(),
+  get_terms: () => magentoService.get_terms(),
+  get_privacy_policy: () => magentoService.get_privacy_policy(),
 
   // fonction issue de shippingbo
   get_order_shippinbo_info_by_reference: (args) => shippingbo.getOrderByReference(args.reference),

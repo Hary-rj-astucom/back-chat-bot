@@ -479,70 +479,441 @@ async function search_brand(brand, attributeCode = 'manufacturer', options = {})
 
 async function get_store_information() {
   try {
-    const { data } = await magento.get('/store/storeConfigs');
+    const data = `Créée en 1977, Cosma Parfumeries est une parfumerie indépendante dont le magasin historique était situé en région parisienne à Rueil Malmaison (92500).
+      Nos équipes mettent depuis toujours un point d’honneur à vous accueillir en ligne avec la même rigueur et le même professionnalisme que dans les points de vente physiques vous faisant ainsi bénéficier de leurs expériences, conseils et suivis personnalisés. 
+      Forte du soutien indéfectible de sa clientèle (5 étoiles notamment sur Truspilot) et Dépositaire agréé des plus grandes marques de parfumerie, Cosma Parfumeries accélère désormais son développement en multipliant les ouvertures de boutiques et en diffusant désormais ses produits dans les principaux pays européens.
+      Cette croissance nous permettra de continuer à vous offrir les meilleurs produits au plus juste prix.
+      
+      Retrouvez ainsi dans la rubrique «parfums» du site, les toutes dernières nouveautés, les bons plans Cosma et surtout, les plus grandes marques ! Dior, Guerlain, Hermès, Yves Saint Laurent, Paco Rabanne, Jean-Paul Gaultier, Lancôme… Les parfums best-sellers comme Angel, La Vie est belle, La Petite Robe Noire, Black Opium, 1 Million, Sauvage, La Nuit de l’Homme, Wanted.
+      Elles sont toutes là et à prix compétitif !
+      Également, l’espace maquillage et soins pourront vous permettre de mettre en valeur votre visage et votre corps à travers les plus grandes gammes de cosmétiques. Clarins, Revlon ou encore Pupa sauront vous satisfaire ! Que ce soit pour un fond de teint, un eyeliner, un crayon, un mascara ou encore un anticernes, nous vous proposons là aussi les marques les plus réputées en parfumerie.
+      Et pour finir, une fois votre choix fait, il ne vous restera plus qu’à commander en quelques clics et nous prendrons le relais pour vous faire parvenir votre commande dans les meilleurs délais !
+      Pour en savoir plus, suivez-nous sur Facebook, Instagram ! `;
     return data;
   } catch (error) {
     handleError('get_store_information', error);
   }
 }
 
-async function getCmsPageByIdentifier(identifier) {
-  const qs = buildSearchCriteria([[{ field: 'identifier', value: identifier, condition_type: 'eq' }]]);
-  const { data } = await magento.get(`/cmsPage/search?${qs}`);
-  return data.items?.[0] || null;
-}
-
-async function getCmsBlockByIdentifier(identifier) {
-  const qs = buildSearchCriteria([[{ field: 'identifier', value: identifier, condition_type: 'eq' }]]);
-  const { data } = await magento.get(`/cmsBlock/search?${qs}`);
-  return data.items?.[0] || null;
-}
-
-async function get_store_hours(blockIdentifier = 'store-hours') {
+async function get_store_hours() {
   try {
-    return await getCmsBlockByIdentifier(blockIdentifier);
+    return `Horaires d'ouverture :
+      Mardi au samedi
+      10h30-19h00`;
   } catch (error) {
     handleError('get_store_hours', error);
   }
 }
 
-async function get_store_locations(blockIdentifier = 'store-locations') {
+async function get_store_locations() {
   try {
-    return await getCmsBlockByIdentifier(blockIdentifier);
+    return `Cosma Parfumeries
+      1 Avenue Paul Doumer
+      92500 Rueil Malmaison
+
+      Tel : 01 47 08 62 37
+
+      Horaires d'ouverture :
+      Mardi au samedi
+      10h30-19h00
+
+
+      IMPORTANT : Les prix pratiqués en magasin sont différents des prix sur internet.
+
+      Les offres promotionnelles sur le site sont uniquement Exclu Web.`;
   } catch (error) {
     handleError('get_store_locations', error);
   }
 }
 
-async function get_contact_information(blockIdentifier = 'contact-information') {
+async function get_contact_information() {
   try {
-    return await getCmsBlockByIdentifier(blockIdentifier);
+    return ` 
+      email : contact@cosma-parfumeries.fr `;
   } catch (error) {
     handleError('get_contact_information', error);
   }
 }
 
-async function get_terms(cmsIdentifier = 'terms-and-conditions') {
+async function get_terms() {
   try {
-    const { data } = await magento.get('/checkoutAgreements');
-    if (data && data.length > 0) return data;
-    return await getCmsPageByIdentifier(cmsIdentifier);
+    return `Conditions générales d'utilisation
+    Préambule
+    Cosma Parfumeries (ci-après dénommée "la Société"), société anonyme au capital de 169 000 euros, dont le siège social est situé 17 Route des Boulangers 78530 Buc, France, immatriculée au Registre du Commerce et des Sociétés de Versailles sous le numéro 384 736 666. La Société exerce une activité de vente au détail notamment par l'intermédiaire d'un site web connecté à Internet, https://www.cosma- parfumeries.com (ci-après dénommé le "Site"). Le Site permet à la Société de proposer à la vente des produits cosmétiques et des parfums (ci-après dénommés les "Produits" aux internautes (ci-après dénommés "Utilisateur(s)" ou "Acheteur(s)") qui naviguent sur le Site. Le Site met à la disposition des Utilisateurs des informations sur les Produits fabriqués par différents fabricants figurant en ligne dans le catalogue, ainsi qu'un système de commande et de paiement en ligne, sous réserve du respect par l'Utilisateur des présentes conditions générales.
+    Toute commande passée sur le Site implique la consultation et l'acceptation expresse des présentes conditions générales de vente.
+
+    Avant de passer commande, l'Utilisateur déclare que l'achat de produits sur le Site n'est pas directement lié à son activité professionnelle et est limité à un usage strictement personnel.
+
+    Article 1 : Objet
+    Les présentes conditions générales ont pour objet de définir les droits et obligations de la Société et de l'Utilisateur nés de l’accès au Site et de la vente en ligne des Produits proposés sur le Site, exclusivement dans le cadre des relations qu'ils établissent sur le réseau Internet et uniquement sur le Site. Ces conditions s'appliquent à l'exclusion de tout autre document. Dès lors qu’une disposition des Conditions Générales serait déclarée nulle et non avenue, les autres dispositions des Conditions Générales resteront en vigueur et de plein effet.
+
+    Article 2 : Produits vendus
+    www.cosma-parfumeries.com est un site de vente en ligne de parfums, de cosmétiques et de maquillage. La Société s'approvisionne en Produits auprès de fabricants qui ont expressément accepté d'être référencés sur le Site. La Société se réserve expressément le droit à tout moment d'ajouter de nouveaux Produits, de supprimer tout ou partie des Produits vendus ou présentés sur le Site, de modifier leur présentation ou de cesser leur commercialisation sur son Site, sans être tenue d'en informer préalablement l'Utilisateur.
+
+    Article 3 : Informations accessibles
+    Les caractéristiques essentielles des Produits obtenus directement auprès des fabricants sont décrites dans les Fiches Produits. Toutefois, les informations caractérisant les Produits présentés peuvent être incomplètes ou ne pas correspondre aux attentes de l'Utilisateur. L'Entreprise ne saurait être tenue responsable d'éventuelles erreurs dans la description des Produits. En outre, la Société ne peut être tenue responsable des erreurs typographiques. De même, les photographies et graphismes illustrant les Produits ne sont pas contractuels. Ils n'ont qu'une valeur indicative et ne peuvent en aucun cas engager la responsabilité de la Société.
+
+    Article 4 : Commandes
+    4.1. Navigation
+    L'Utilisateur peut naviguer librement sur les différentes pages du Site, sans être lié par une quelconque commande.
+    
+    4.2. Passation de commande
+    Si l'Utilisateur souhaite passer commande, il sélectionnera les différents Produits qui l'intéressent en cliquant sur l'icône de la colonne " Ajouter ". La quantité de références commandées par l'Utilisateur est automatiquement limitée en fonction des recommandations émises à cet égard par les fabricants. La commande de l'Utilisateur sera récapitulée dans une page intitulée " mon panier ", consultable à tout moment, reprenant tous les éléments de la commande et son montant total. L'Utilisateur peut revenir sur le panier avant que la commande ne soit validée, le compléter, en modifier les quantités ou l'annuler tant qu'il n'a pas été validé. Si la liste présentée correspond aux Produits choisis, l'Utilisateur validera le récapitulatif en cliquant sur le bouton "Valider la commande". L'Utilisateur devra alors s'identifier, soit en saisissant son adresse électronique et son mot de passe, s'il a déjà effectué des achats sur le Site, soit en remplissant avec exactitude le formulaire mis à sa disposition, sur lequel il fera figurer les informations nécessaires à son identification et notamment ses nom, prénom, email, adresse postale et numéro de téléphone au format international. L'Utilisateur s'engage à ce que les informations qu'il fournit à la Société soient complètes, exactes et à jour. En cas d'informations incomplètes ou inexactes, la Société se réserve le droit d'annuler la commande et le paiement. Une fois identifié, un bon de commande apparaîtra à l'écran, récapitulant : la nature, la quantité et le prix des Produits sélectionnés par l'Utilisateur, l'adresse de facturation et de livraison des Produits.
+    
+    4.3. Validation définitive de la commande
+    Après avoir vérifié le contenu de sa commande et complété l'ensemble des informations demandées, l'Utilisateur précisera le mode de paiement qu'il souhaite utiliser pour régler sa commande : virement, carte bancaire, PayPal, Apple Pay, Google Pay, Bancontact, iDeal. Dès que l'Utilisateur confirme son paiement, la commande est enregistrée et devient irrévocable. L'Utilisateur devient alors Acheteur. Les systèmes d'enregistrement automatique de la Société sont considérés comme valant preuve du contenu et de la date de la commande.
+    
+    4.4 Confirmation de la commande
+    Une fois le paiement confirmé, un récapitulatif de la commande de l'Acheteur s'affiche avec le numéro de la transaction. Dans les 24 heures suivant l'enregistrement de la commande, l'Acheteur recevra un courrier électronique accusant réception de la commande. Si ce document n'est pas reçu dans le délai indiqué, il appartient à l'Acheteur de contacter la Société, car il est possible que la commande n'ait pas pu être enregistrée pour des raisons techniques.
+
+    4.5. Modifications de la commande
+    Toute modification de la commande demandée par l'Acheteur ne peut être prise en considération que si elle est parvenue à la Société par courrier électronique à contact@cosma-parfumeries.fr avant l'expédition des Produits.
+
+    Article 5 : Indisponibilité des produits
+    Les produits sont proposés dans la limite des stocks disponibles. Dans l'éventualité d'une indisponibilité de l'un des Produits après passation de la commande par l’Acheteur, la Société l’en informera et lui proposera le remboursement du Produit ou d’attendre une nouvelle réception fournisseur dudit Produit.
+
+    Dans l’hypothèse d’une commande comprenant plusieurs produits, la Société procédera à une livraison partielle de la commande des produits commandés disponibles sauf avis contraire immédiat de l’Acheteur.
+    
+    Article 6 : Prix - Paiement
+    6.1. Prix
+    Les prix des produits sont indiqués en euros ou dans la devise locale du pays de livraison. Ils incluent la TVA du pays de livraison applicable au jour de la commande.
+
+    Les prix indiqués ne comprennent pas les frais de livraison, qui seront facturés en supplément et seront précisés à l'Acheteur lors de la validation de la commande.
+
+    Les prix indiqués sur le Site sont indicatifs et mis à jour régulièrement et donc susceptibles d'être modifiés sans préavis.
+
+    Toutefois, les prix facturés sont ceux en vigueur à la date de la commande. L'Acheteur peut également bénéficier, pendant certaines périodes spécifiques, d'offres promotionnelles sur certains Produits. Ces offres seront annoncées en ligne sur le Site et seront valables dans la limite des stocks disponibles.
+
+    
+    6.2. Paiement
+    Les commandes sont payables en euros Toutes Taxes Comprises ou dans la devise locale TTC du pays de livraison. Les éventuels frais bancaires liés à l’achat seront à la charge de l’Acheteur.
+
+    Le paiement des Produits s'effectue soit :
+
+    - Par carte de crédit via Revolut, Mollie ou Lyra, qui font partie des solutions de paiement les plus sécurisées du marché.
+
+    Elles garantissent la sécurité et la confidentialité de toutes les données personnelles collectées lors du paiement. Les pages de paiement desdites solutions utilisent le protocole TLS (cryptage de toutes les informations liées à la carte) et font l'objet de nombreux agréments (certification PCI DSS, agrément CB Cartes Bancaires, agrément d'agent commercial Visa, etc.).
+
+    Ainsi à aucun moment les coordonnées bancaires des Acheteurs ne sont affichées ou visibles.
+
+    Ces dernières ne sont en outre pas stockées sur les serveurs informatiques de la Société.
+
+    - Par Paypal. Les informations financières et personnelles sont automatiquement cryptées lorsque des informations sensibles sont envoyées aux serveurs de PAYPAL.
+
+    - Par virement bancaire. Afin de finaliser le paiement et de traiter la commande, l'Acheteur doit réaliser un virement du montant de sa commande sur le compte bancaire de la Société dont les coordonnées sont communiquées après le passage de la commande en indiquant clairement les références de la commande. Dès réception du virement, la commande sera traitée et l’Acheteur en sera informé par courrier électronique. Le paiement doit être reçu par la Société dans un délai maximum de 10 jours après l'enregistrement de la commande. Passé ce délai de 10 jours, la commande sera annulée.
+
+    - Apple Pay : Dans cette éventualité, Apple Pay utilise un numéro propre à l’appareil de l’Acheteur et un code de transaction unique (La société ne dispose ainsi jamais des numéros de carte de paiement de l’Acheteur).
+
+    - Bancontact : Dans cette éventualité, l’Acheteur doit scanner le code QR avec l’application dédiée, et confirmer le montant avec son code PIN, son empreinte digitale ou sa reconnaissance faciale.
+
+    - iDeal : Système de paiement par internet utilisé essentiellement aux Pays-Bas.
+
+    Dans le cadre de la lutte contre les fraudes sur Internet, les informations relatives aux commandes des Acheteurs pourront être transmises à tout tiers pour vérification.
+
+    La société se réserve le droit de demander une photocopie de la carte d'identité de l'acheteur pour tout paiement par carte bancaire.
+
+    
+    Article 7 : Livraison
+    7.1. Modalités de livraison
+    Si le destinataire est absent lors de la livraison de la commande à domicile, une seconde tentative de livraison sera effectuée. La date de cette nouvelle livraison sera déterminée au choix à l’aide du formulaire notifié par mail ou SMS. En cas de nouvelle absence du destinataire, le colis est déposé en point de retrait et peut être récupéré pendant la période d’instance communiquée par le transporteur. Passé ce délai, la commande sera automatiquement retournée à la Société qui prendra contact avec l'Acheteur pour proposer une réexpédition ou un remboursement de la commande.
+
+    
+    7.2. Délais de livraison
+    Les délais de livraison sont indiqués en jours ouvrés. Aucune expédition n'est effectuée le samedi, le dimanche ou jour férié. Aucune livraison n'est effectuée le dimanche ou jour férié.
+
+    La Société fera son possible pour expédier les produits dans les deux jours ouvrés suivant la confirmation de la commande.
+
+    Les colis sont pris en charge par les transporteurs entre 14h00 et 16h30, du lundi au vendredi. Les commandes passées après 15h00 du lundi au jeudi seront expédiées dans la mesure du possible le lendemain, et le lundi si la commande est validée le vendredi après 15h00. Le délai de livraison commence le jour où le colis quitte les locaux de la Société.
+
+    La livraison interviendra dans les délais estimatifs indiqués sur l’email de confirmation de commande que la Société aura adressé à l’Acheteur sauf événement indépendant de la volonté de la Société.
+
+    Les produits seront expédiés par Mondial Relay, La Poste (Colissimo suivi), dans les délais estimatifs de 48 à 72 heures, ou de 24/48 heures pour une livraison par TNT.
+
+    La Société décline donc toute responsabilité en cas de non-respect des délais de livraison de la part des transporteurs, ainsi qu'en cas de perte des Produits commandés ou de grève des transporteurs, et d'une manière générale, en cas d'événements indépendants de sa volonté.
+
+    Les retards de livraison ne peuvent donner lieu à aucune demande de dommages et intérêts ou de retenue de la part de l'Acheteur.
+
+    En cas de retard de livraison par rapport à la date initialement prévue, l'Acheteur doit le signaler par e-mail à contact@cosma-parfumeries.fr ou par téléphone (dans un délai maximum de sept jours) afin de permettre à la Société d'effectuer les démarches auprès du transporteur.
+
+    Une enquête auprès du transporteur peut prendre jusqu'à 30 jours ouvrables. Si le colis est retrouvé pendant ce délai, il sera expédié immédiatement à l'adresse de livraison indiquée sur le bon de commande. En revanche, si le colis n'est pas retrouvé à l'issue de ce délai de 30 jours, la Société procédera, à ses frais, à une nouvelle expédition ou au remboursement des produits commandés par l'Acheteur.
+
+    En cas de litige de livraison, des documents (photocopie de la carte d'identité et des documents d'accompagnement) seront demandés afin d'étayer la réclamation et d'obtenir un dédommagement si la conclusion de l'enquête est favorable au destinataire.
+
+    
+    7.3. Réception des produits
+    A réception des colis, si le carton d'expédition apparaît visiblement endommagé (emballage bosselé, perforé, déchiré, mouillé, coupé au cutter, etc.), reconditionné avec un autre adhésif ou si le poids du colis laisse à penser qu'il est vide, la réception du colis doit être refusée afin de procéder à un retour à l'expéditeur ou des réserves doivent être émises sur le bordereau de réception du transporteur, sans quoi la société Cosma Parfumeries ne pourra procéder à l'indemnisation des Produits éventuellement abîmés, inutilisables ou manquants.
+
+    A réception du Produit, il appartient à l'Acheteur de vérifier sans délai la conformité et l'intégrité des Produits expédiés, avant de les ouvrir (ouverture du film cellophane de protection).
+
+    Toute anomalie concernant la livraison doit être indiquée par l'Acheteur sur le récépissé présenté par le transporteur au moment de la livraison. Dans ce cas, pour que le retour soit accepté, l'Acheteur doit en informer la Société dans les 2 jours suivant la livraison du colis, par e-mail à contact@cosma-parfumeries.fr ou par téléphone au +33(0)1 56 83 84 88.
+
+    En cas de réclamation relative à la commande et/ou sa livraison, l'Acheteur doit en informer la Société dans les 2 jours suivant la réception de la commande, par e-mail à contact@cosma-parfumeries.fr ou par téléphone au +33(0)1 56 83 84 88. L'Acheteur transmettra à la Société des photographies des éléments à l'appui de sa demande.
+
+    Toute réclamation formulée après ce délai sera rejetée et la Société sera dégagée de toute responsabilité.
+
+    De même toute réclamation portant sur la présentation d'un emballage ou une modification d'aspect du Produit à la suite d'un renouvellement de gamme du Produit par le fabricant ne pourra pas être prise en compte.
+
+    
+    7.4. Délai de rétractation et retour des produits
+    Conformément à l'article L221-18 du Code de la consommation, l'Acheteur dispose d'un délai de rétractation de quatorze (14) jours calendaires à compter du lendemain de la réception du Produit pour retourner, à ses frais, le(s) Produit(s) qu'il a commandé(s) s'il n'en est pas satisfait et s'il n'a pas été ouvert et utilisé. Toutefois, si le délai expire un samedi, un dimanche ou un jour férié, il est prorogé jusqu'au premier jour ouvrable suivant. Les Produits doivent être retournés complets, dans un état propre à leur revente (produits en parfait état, dans leur emballage d'origine, sous cellophane de protection, non utilisés ou abîmés, accompagnés de leurs accessoires, échantillons, notices...). La Société se réserve le droit de refuser tout retour ne respectant pas les conditions ci-dessus. La Société n'accepte pas les colis envoyés en port dû.
+
+    Conformément aux dispositions de l'article L.221-28 du Code de la consommation, le droit de rétractation ne peut être exercé pour les produits de beauté (cosmétiques et maquillage) descellés après la livraison pour des raisons d'hygiène ou de protection de la santé. L'Acheteur n'a donc pas de droit de rétractation pour ce type de produit.
+
+    L'Acheteur peut exercer son droit de rétractation :
+    - soit en répondant à l'e-mail de confirmation de commande envoyé par la Société,
+    - soit à l’aide du formulaire de rétractation prévu par l’article R.221-1 du Code de la Consommation ci-dessous :
+
+
+    MODÈLE DE FORMULAIRE DE RÉTRACTATION
+
+
+    Je/nous (*) vous notifie/notifions (*) par la présente ma/notre (*) rétractation du contrat portant sur la vente du bien (*) ci-dessous :
+
+
+    Commandé le                /reçu le             :
+
+
+    Nom du (des) consommateur(s) :
+
+
+    Adresse du (des) consommateur(s) :
+
+
+    Signature du (des) consommateur(s) (uniquement en cas de notification du présent formulaire sur papier) :
+
+
+    Date :
+
+
+    (*) Rayez la mention inutile.
+
+
+    - soit en écrivant sur papier libre exprimant sa volonté claire de se rétracter, en indiquant de manière claire et lisible ses coordonnées et les références de sa commande.
+
+    Le formulaire de rétractation ou la rétractation rédigée sur papier libre peut être envoyé(e) :
+    - par courrier à l'adresse suivante : Cosma - Service Clients - 17 Route des Boulangers, 78 530 BUC (FRANCE)
+    - par courrier électronique à l'adresse suivante : contact@cosma-parfumeries.fr
+
+
+    Si les conditions de la rétractation sont réunies, la Société procèdera au remboursement du Produit retourné par l’Acheteur sur le compte émetteur de l’achat.
+
+    
+    Article 8 : Garanties légales
+    8.1. Garantie légale de conformité
+    Dans l’hypothèse d’une non-conformité du produit réceptionné suite à la commande de l’Acheteur, ce dernier bénéficie de la garantie légale de conformité dans les conditions de l’article L.217-4 et suivants du Code de la consommation.
+
+    En cas de défaut de conformité existant au moment de la délivrance du produit au sens de l'article  L. 216-1 du Code de la consommation, l'Acheteur doit en informer la Société dans le délai de 24 mois suivant la réception de la commande, par e-mail à contact@cosma-parfumeries.fr ou par téléphone au +33(0)1 56 83 84 88.
+    L’Acheteur pourra mettre en œuvre la garantie légale de conformité lorsque le produit est impropre à l’usage habituellement attendu (défaut de fabrication) pour un produit du même type, lorsqu’il présente un défaut d’emballage ou lorsqu’il ne correspond pas à la description mentionnée sur le site de la Société.
+
+    L’Acheteur transmettra à la Société la preuve de son achat à l’appui de sa demande. Si le défaut de conformité du produit est avéré, l’Acheteur pourra solliciter auprès de la Société la mise en conformité du produit par réparation ou son remplacement. Pour ce faire, l’Acheteur retournera le produit non conforme au frais de la Société qui transmettra un bon de retour à l’Acheteur à cet effet.
+
+    La Société pourra refuser la /mise en conformité sollicitée si celle-ci est impossible ou entraîne des coûts disproportionnés. Le cas échéant, l’Acheteur pourra demander le remplacement du produit non-conforme après réception de ce dernier par la Société.
+
+    Si la réparation est possible, la mise en conformité du produit aura lieu dans le délai de trente jours suivant la réception de la demande de l’acheteur sous réserve de la réception du produit non conforme par la Société.
+
+    Le produit réparé dans le cadre de la garantie légale de conformité bénéficiera d'une extension de cette garantie d’une durée de six mois.
+
+    Si aucune des solutions envisagées ne peut être mise en œuvre dans le mois suivant la demande de l’Acheteur, ce dernier aura la possibilité de demander une diminution du prix dans les cas prévus à l'article  L. 217-14 du Code de la consommation.
+
+    Dans le cas où le défaut de conformité est mineur, l’Acheteur ne pourra bénéficier du remboursement du prix du produit.
+
+    Dans le cas où la réduction du prix est accordée par la Société, celle-ci sera proportionnelle à la différence entre la valeur du produit délivré et la valeur du produit en l'absence du défaut de conformité.
+
+    Le remboursement accordé la Société sera effectué dès réception du produit non-conforme retourné à l’aide du bon de retour transmis par la Société et au plus tard dans les quatorze jours suivants.
+
+    
+    8.2. Garantie légale des vices cachés
+    Conformément aux dispositions des articles 1641 et suivants du Code civil, l’Acheteur bénéficie de la garantie légale des vices cachés.
+
+    En présence d’un vice caché d’un produit, l'Acheteur doit en informer la Société dans le délai dans le délai de 24 mois suivant la découverte du vice entachant le produit acheté auprès de la Société, par e-mail à contact@cosma-parfumeries.fr ou par téléphone au 01 56 83 84 88.
+
+    L’Acheteur pourra mettre en œuvre la garantie légale des vices cachés si les 3 conditions suivantes sont réunies : 
+
+    - Le défaut doit être un défaut caché, c'est-à-dire non apparent lors de l'achat,
+
+    - Le défaut doit rendre le produit inutilisable ou diminuer très fortement son usage,
+
+    - Le défaut doit exister au moment de l'achat.
+
+
+    L’Acheteur transmettra à la Société la preuve de son achat à l’appui de sa demande ainsi toutes preuves démontrant que le défaut rend le produit impropre à l’usage auquel on le destine ou le diminue fortement en produisant des photographies de toutes les faces du produit et de son emballage.
+
+    Pour tout article comportant un vice caché, la procédure se fera directement auprès du fabricant du produit ou auprès de la Société selon le produit concerné, qui se chargera de l'échange de la marchandise après analyse, si le vice caché du produit est confirmé par le fabricant. La Société ne pourra voir sa responsabilité engagée à ce titre et ne sera pas tenue de rembourser l'Acheteur.
+
+    Sous réserve de l’apport de ces preuves, l’Acheteur pourra choisir entre la résolution de la vente ou une réduction du prix de vente, conformément à l’article 1644 du code civil.
+
+    Ces dispositions ne sont pas exclusives du droit de rétraction défini à l’article 7.4 ci-dessus.
+
+    
+    Article 9 : Informatique et liberté
+    9.1. Données personnelles
+    Les informations personnelles collectées dans le cadre de la vente à distance sont obligatoires pour assurer la bonne gestion des commandes, des livraisons et des factures. Ces informations sont confidentielles. Le défaut de renseignement entraîne le rejet automatique de la commande.
+
+    Conformément notamment au RGPD et à la loi n° 78-17 du 6 janvier 1978 modifiée relative à l'informatique, aux fichiers et aux libertés, l'Acheteur dispose d'un droit d'accès, de modification, de rectification et de suppression des données qui le concernent. Pour exercer ce droit, l'Acheteur peut soit envoyer un e-mail à contact@cosma-parfumeries.fr, soit écrire à la Société : Cosma - Service Clients - 17 Route des Boulangers, 78 530 BUC, FRANCE.
+
+    En passant commande sur le Site, l'Acheteur donne son consentement à l'utilisation des informations nominatives recueillies au moment de la commande dans le fichier clients de la Société à des fins de facturation. Par ailleurs, la Société pourra utiliser les données personnelles de l'Acheteur pour lui adresser des offres commerciales susceptibles de l'intéresser. En application de la loi Informatique et Libertés, l'Acheteur a le droit de s'opposer à recevoir des documents de prospection commerciale non sollicités par courrier électronique, en cochant la case prévue à cet effet en ligne ou en adressant un courrier à la Société : Cosma - Service Clients - 17 Route des Boulangers, 78 530 BUC, FRANCE.
+
+    
+    9.2. Cookies
+    La Société se réserve le droit d'utiliser des cookies sur le Site afin de faciliter la navigation et de personnaliser les informations apparaissant sur le Site. La Société se réserve également le droit d'utiliser des cookies pour collecter des informations non personnelles sur les Utilisateurs (adresse IP, type de navigateur Internet, système d'exploitation utilisé ou pages du Site visitées par l'Utilisateur). Ces cookies ne sont utilisés par la Société que pour personnaliser le service offert à l'Utilisateur.
+
+    
+    Article 10 : Propriété intellectuelle
+    Conformément aux lois régissant la propriété industrielle, les droits littéraires et artistiques ou autres droits similaires, ce site et tous les éléments (images, dessins, scripts sources, logos, etc.) composant le Site sont la propriété exclusive de la Société ou de ses fournisseurs, ces derniers ne concédant aucune licence, ni aucun droit autre que celui de consulter le site.
+
+    L'Utilisateur s'engage donc à ne pas distribuer ou reproduire le Site, en tout ou en partie, sous quelque forme que ce soit. La société est propriétaire de la marque "Cosma Parfumeries" et du nom de domaine "cosma-parfumeries.com". Toute reproduction, distribution, transmission, modification ou utilisation de ces marques à quelque fin que ce soit est interdite.
+
+    Toute autre utilisation est constitutive de contrefaçon et sanctionnée au titre de la propriété intellectuelle, sauf autorisation préalable et écrite de Cosma Parfumeries.
+
+    
+    Article 11 : Droit applicable - Litige
+    Les présentes conditions générales sont soumises à la loi française. En cas de litige, les tribunaux français seront seuls compétents. Toutefois, une solution amiable sera recherchée avant toute action judiciaire.
+
+    L’Acheteur est informé de la possibilité de recourir, en cas de contestation, à une procédure de médiation conventionnelle en adressant une réclamation écrite au service de médiation FEVAD, pour toute réclamation liée à un achat sur le Site introduite au cours des 12 derniers mois.
+
+    Conformément aux dispositions du Code de la consommation concernant le règlement amiable des litiges, la Société adhère au Service du Médiateur du e-commerce de la FEVAD (Fédération du e-commerce et de la vente à distance) dont les coordonnées sont les suivantes :
+
+    Médiateur de la consommation FEVAD
+
+    BP 20015
+
+    75362 PARIS CEDEX 8
+
+    https://www.mediateurfevad.fr
+
+    Après démarche préalable écrite de l’Acheteur auprès du service client de la Société, le Service du Médiateur peut être saisi pour tout litige de consommation dont le règlement n’aurait pas abouti.
+
+    Pour les livraisons effectuées en Belgique, toute plainte peut également être introduite au service de médiation pour les consommateurs
+
+    Boulevard du Roi Albert II, 8, Bte 1
+
+    1000 Bruxelles
+
+    Tél. : 02/702.52.20
+
+    Fax. : 02/808.71.29
+
+    E-mail : contact@mediationconsommateur.be
+
+    L’Acheteur peut enfin également introduire sa plainte auprès des services de la commissions européenne en utilisant le lien ci-dessous :
+
+    https://ec.europa.eu/consumers/odr/main/?event=main.home.selfTest
+
+    La solution proposée par le Médiateur ne s’impose pas aux Parties, qui restent libres à tout moment de sortir du processus de médiation.
+
+    
+    Article 12 : Modification des conditions générales de vente
+    Compte tenu des évolutions possibles du Site, la Société se réserve la possibilité d'adapter ou de modifier à tout moment les présentes conditions générales de vente. Les nouvelles conditions générales de vente seront, le cas échéant, portées à la connaissance de l'Utilisateur par modification en ligne et ne seront applicables qu'aux ventes réalisées postérieurement à la modification.`
   } catch (error) {
     handleError('get_terms', error);
   }
 }
 
-async function get_privacy_policy(cmsIdentifier = 'privacy-policy-cookie-restriction-mode') {
+async function get_privacy_policy() {
   try {
-    return await getCmsPageByIdentifier(cmsIdentifier);
+    return `Article 9 : Informatique et liberté
+    9.1. Données personnelles
+    Les informations personnelles collectées dans le cadre de la vente à distance sont obligatoires pour assurer la bonne gestion des commandes, des livraisons et des factures. Ces informations sont confidentielles. Le défaut de renseignement entraîne le rejet automatique de la commande.
+
+    Conformément notamment au RGPD et à la loi n° 78-17 du 6 janvier 1978 modifiée relative à l'informatique, aux fichiers et aux libertés, l'Acheteur dispose d'un droit d'accès, de modification, de rectification et de suppression des données qui le concernent. Pour exercer ce droit, l'Acheteur peut soit envoyer un e-mail à contact@cosma-parfumeries.fr, soit écrire à la Société : Cosma - Service Clients - 17 Route des Boulangers, 78 530 BUC, FRANCE.
+
+    En passant commande sur le Site, l'Acheteur donne son consentement à l'utilisation des informations nominatives recueillies au moment de la commande dans le fichier clients de la Société à des fins de facturation. Par ailleurs, la Société pourra utiliser les données personnelles de l'Acheteur pour lui adresser des offres commerciales susceptibles de l'intéresser. En application de la loi Informatique et Libertés, l'Acheteur a le droit de s'opposer à recevoir des documents de prospection commerciale non sollicités par courrier électronique, en cochant la case prévue à cet effet en ligne ou en adressant un courrier à la Société : Cosma - Service Clients - 17 Route des Boulangers, 78 530 BUC, FRANCE.
+
+    
+    9.2. Cookies
+    La Société se réserve le droit d'utiliser des cookies sur le Site afin de faciliter la navigation et de personnaliser les informations apparaissant sur le Site. La Société se réserve également le droit d'utiliser des cookies pour collecter des informations non personnelles sur les Utilisateurs (adresse IP, type de navigateur Internet, système d'exploitation utilisé ou pages du Site visitées par l'Utilisateur). Ces cookies ne sont utilisés par la Société que pour personnaliser le service offert à l'Utilisateur.`;
   } catch (error) {
     handleError('get_privacy_policy', error);
   }
 }
 
-async function get_return_policy(cmsIdentifier = 'return-policy') {
+async function get_return_policy() {
   try {
-    return await getCmsPageByIdentifier(cmsIdentifier);
+    return `Article 7 : Livraison
+      7.1. Modalités de livraison
+      Si le destinataire est absent lors de la livraison de la commande à domicile, une seconde tentative de livraison sera effectuée. La date de cette nouvelle livraison sera déterminée au choix à l’aide du formulaire notifié par mail ou SMS. En cas de nouvelle absence du destinataire, le colis est déposé en point de retrait et peut être récupéré pendant la période d’instance communiquée par le transporteur. Passé ce délai, la commande sera automatiquement retournée à la Société qui prendra contact avec l'Acheteur pour proposer une réexpédition ou un remboursement de la commande.
+
+      
+      7.2. Délais de livraison
+      Les délais de livraison sont indiqués en jours ouvrés. Aucune expédition n'est effectuée le samedi, le dimanche ou jour férié. Aucune livraison n'est effectuée le dimanche ou jour férié.
+
+      La Société fera son possible pour expédier les produits dans les deux jours ouvrés suivant la confirmation de la commande.
+
+      Les colis sont pris en charge par les transporteurs entre 14h00 et 16h30, du lundi au vendredi. Les commandes passées après 15h00 du lundi au jeudi seront expédiées dans la mesure du possible le lendemain, et le lundi si la commande est validée le vendredi après 15h00. Le délai de livraison commence le jour où le colis quitte les locaux de la Société.
+
+      La livraison interviendra dans les délais estimatifs indiqués sur l’email de confirmation de commande que la Société aura adressé à l’Acheteur sauf événement indépendant de la volonté de la Société.
+
+      Les produits seront expédiés par Mondial Relay, La Poste (Colissimo suivi), dans les délais estimatifs de 48 à 72 heures, ou de 24/48 heures pour une livraison par TNT.
+
+      La Société décline donc toute responsabilité en cas de non-respect des délais de livraison de la part des transporteurs, ainsi qu'en cas de perte des Produits commandés ou de grève des transporteurs, et d'une manière générale, en cas d'événements indépendants de sa volonté.
+
+      Les retards de livraison ne peuvent donner lieu à aucune demande de dommages et intérêts ou de retenue de la part de l'Acheteur.
+
+      En cas de retard de livraison par rapport à la date initialement prévue, l'Acheteur doit le signaler par e-mail à contact@cosma-parfumeries.fr ou par téléphone (dans un délai maximum de sept jours) afin de permettre à la Société d'effectuer les démarches auprès du transporteur.
+
+      Une enquête auprès du transporteur peut prendre jusqu'à 30 jours ouvrables. Si le colis est retrouvé pendant ce délai, il sera expédié immédiatement à l'adresse de livraison indiquée sur le bon de commande. En revanche, si le colis n'est pas retrouvé à l'issue de ce délai de 30 jours, la Société procédera, à ses frais, à une nouvelle expédition ou au remboursement des produits commandés par l'Acheteur.
+
+      En cas de litige de livraison, des documents (photocopie de la carte d'identité et des documents d'accompagnement) seront demandés afin d'étayer la réclamation et d'obtenir un dédommagement si la conclusion de l'enquête est favorable au destinataire.
+
+      
+      7.3. Réception des produits
+      A réception des colis, si le carton d'expédition apparaît visiblement endommagé (emballage bosselé, perforé, déchiré, mouillé, coupé au cutter, etc.), reconditionné avec un autre adhésif ou si le poids du colis laisse à penser qu'il est vide, la réception du colis doit être refusée afin de procéder à un retour à l'expéditeur ou des réserves doivent être émises sur le bordereau de réception du transporteur, sans quoi la société Cosma Parfumeries ne pourra procéder à l'indemnisation des Produits éventuellement abîmés, inutilisables ou manquants.
+
+      A réception du Produit, il appartient à l'Acheteur de vérifier sans délai la conformité et l'intégrité des Produits expédiés, avant de les ouvrir (ouverture du film cellophane de protection).
+
+      Toute anomalie concernant la livraison doit être indiquée par l'Acheteur sur le récépissé présenté par le transporteur au moment de la livraison. Dans ce cas, pour que le retour soit accepté, l'Acheteur doit en informer la Société dans les 2 jours suivant la livraison du colis, par e-mail à contact@cosma-parfumeries.fr ou par téléphone au +33(0)1 56 83 84 88.
+
+      En cas de réclamation relative à la commande et/ou sa livraison, l'Acheteur doit en informer la Société dans les 2 jours suivant la réception de la commande, par e-mail à contact@cosma-parfumeries.fr ou par téléphone au +33(0)1 56 83 84 88. L'Acheteur transmettra à la Société des photographies des éléments à l'appui de sa demande.
+
+      Toute réclamation formulée après ce délai sera rejetée et la Société sera dégagée de toute responsabilité.
+
+      De même toute réclamation portant sur la présentation d'un emballage ou une modification d'aspect du Produit à la suite d'un renouvellement de gamme du Produit par le fabricant ne pourra pas être prise en compte.
+
+      
+      7.4. Délai de rétractation et retour des produits
+      Conformément à l'article L221-18 du Code de la consommation, l'Acheteur dispose d'un délai de rétractation de quatorze (14) jours calendaires à compter du lendemain de la réception du Produit pour retourner, à ses frais, le(s) Produit(s) qu'il a commandé(s) s'il n'en est pas satisfait et s'il n'a pas été ouvert et utilisé. Toutefois, si le délai expire un samedi, un dimanche ou un jour férié, il est prorogé jusqu'au premier jour ouvrable suivant. Les Produits doivent être retournés complets, dans un état propre à leur revente (produits en parfait état, dans leur emballage d'origine, sous cellophane de protection, non utilisés ou abîmés, accompagnés de leurs accessoires, échantillons, notices...). La Société se réserve le droit de refuser tout retour ne respectant pas les conditions ci-dessus. La Société n'accepte pas les colis envoyés en port dû.
+
+      Conformément aux dispositions de l'article L.221-28 du Code de la consommation, le droit de rétractation ne peut être exercé pour les produits de beauté (cosmétiques et maquillage) descellés après la livraison pour des raisons d'hygiène ou de protection de la santé. L'Acheteur n'a donc pas de droit de rétractation pour ce type de produit.
+
+      L'Acheteur peut exercer son droit de rétractation :
+      - soit en répondant à l'e-mail de confirmation de commande envoyé par la Société,
+      - soit à l’aide du formulaire de rétractation prévu par l’article R.221-1 du Code de la Consommation ci-dessous :
+
+
+      MODÈLE DE FORMULAIRE DE RÉTRACTATION
+
+
+      Je/nous (*) vous notifie/notifions (*) par la présente ma/notre (*) rétractation du contrat portant sur la vente du bien (*) ci-dessous :
+
+
+      Commandé le                /reçu le             :
+
+
+      Nom du (des) consommateur(s) :
+
+
+      Adresse du (des) consommateur(s) :
+
+
+      Signature du (des) consommateur(s) (uniquement en cas de notification du présent formulaire sur papier) :
+
+
+      Date :
+
+
+      (*) Rayez la mention inutile.
+
+
+      - soit en écrivant sur papier libre exprimant sa volonté claire de se rétracter, en indiquant de manière claire et lisible ses coordonnées et les références de sa commande.
+
+      Le formulaire de rétractation ou la rétractation rédigée sur papier libre peut être envoyé(e) :
+      - par courrier à l'adresse suivante : Cosma - Service Clients - 17 Route des Boulangers, 78 530 BUC (FRANCE)
+      - par courrier électronique à l'adresse suivante : contact@cosma-parfumeries.fr
+
+
+      Si les conditions de la rétractation sont réunies, la Société procèdera au remboursement du Produit retourné par l’Acheteur sur le compte émetteur de l’achat.
+
+      `;
   } catch (error) {
     handleError('get_return_policy', error);
   }

@@ -224,6 +224,39 @@ const prestashopToolDefinitions = [
       }
     }
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_store_information',
+      description: "Donne la description de la boutique",
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_store_locations',
+      description: "Donne la localisation de la boutique",
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_terms',
+      description: "Avoir les terms et condition general de la boutique en ligne",
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_privacy_policy',
+      description: "Avoir la politique de confidentialite",
+      parameters: { type: 'object', properties: {} }
+    }
+  },
+
   // fonction issue de shippingbo
   {
     type: 'function',
@@ -284,6 +317,10 @@ const prestashopToolImplementations = {
   get_return_policy: (args) => prestashopService.getReturnPolicy(args.boutique),
   get_contact_information: (args) => prestashopService.getContactInformation(args.boutique),
   get_store_hours: (args) => prestashopService.getStoreHours(args.boutique),
+  get_store_information: () => prestashopService.get_store_information(),
+  get_store_locations: () => prestashopService.get_store_locations(),
+  get_terms: () => prestashopService.get_terms(),
+  get_privacy_policy: () => prestashopService.get_privacy_policy(),
 
   // fonction issue de shippingbo
   get_order_shippinbo_info_by_reference: (args) => shippingbo.getOrderByReference(args.reference),
