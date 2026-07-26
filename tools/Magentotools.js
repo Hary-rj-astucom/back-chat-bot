@@ -222,8 +222,8 @@ const magentoToolDefinitions = [
         type: 'object',
         properties: {
           keyword: { type: 'string', description: "Mot-clé optionnel (nom, marque...) à combiner avec les autres critères." },
-          gender: { type: 'string', description: "Genre du produit recherché, ex: 'homme', 'femme', 'mixte'." },
-          scentFamily: { type: 'string', description: "Famille olfactive recherchée, ex: 'agrumes', 'boisé', 'floral', 'oriental'." },
+          gender: { type: 'string', description: "Genre du produit recherché.", enum: ['homme', 'femme', 'mixte', 'enfant', 'fille', 'garcon'] },
+          scentFamily: { type: 'string', description: "Mot-clé de famille olfactive recherché (texte libre), ex: 'agrumes', 'boisé', 'floral', 'oriental', 'vanille'." },
           categoryId: { type: 'string', description: "ID de catégorie Magento, si connu." },
           limit: LIST_LIMIT_SCHEMA
         }

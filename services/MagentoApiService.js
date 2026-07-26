@@ -409,22 +409,33 @@ async function list_searchable_attributes() {
 }
 
 // ------------------------------------------------------------
+// Mapping "genre" -> ID d'option de l'attribut Magento "perfume_for"
+// (attribut de type select, découvert via list_searchable_attributes()).
+// Le libellé stocké est "Parfum Homme"/"Parfum Femme"/etc, mais Magento
+// exige l'ID numérique de l'option pour filtrer, pas le texte.
+// ------------------------------------------------------------
+const PERFUME_FOR_OPTION_IDS = {
+  homme: '862',
+  femme: '859',
+  mixte: '863',
+  enfant: '858',
+  fille: '860',
+  garcon: '861',
+  garçon: '861',
+  bebe: '4254',
+  bébé: '4254'
+};
+
+function resolveGenderOptionId(gender) {
+  if (!gender) return null;
+  const key = stripDiacritics(String(gender).toLowerCase().trim());
+  return PERFUME_FOR_OPTION_IDS[key] || null;
+}
+
+// ------------------------------------------------------------
 // Recherche PAR ATTRIBUTS structurés (genre, famille olfactive,
 // catégorie...), à la différence de search_products qui ne fait que
 // du mot-clé dans du texte libre.
-//
-// ⚠️ À ADAPTER avant utilisation : remplace 'ATTR_GENRE' et
-// 'ATTR_FAMILLE_OLFACTIVE' par les vrais attribute_code de ton
-// catalogue (trouvables via list_searchable_attributes() ci-dessus).
-//
-// ⚠️ IMPORTANT : si l'attribut est de type "select"/"multiselect"
-// (ce qui est très probable pour genre/famille olfactive), Magento
-// stocke en base l'ID de l'option, pas le libellé texte. Un filtre
-// eq/like sur "agrume" ne matchera donc RIEN si la vraie valeur
-// stockée est "12". Dans ce cas, utilise `options` renvoyées par
-// list_searchable_attributes() pour convertir le libellé choisi par
-// le client (ex: "agrume") vers l'ID d'option correspondant AVANT
-// de construire le filtre.
 //
 // criteria = { keyword, gender, scentFamily, categoryId }
 // ------------------------------------------------------------
@@ -438,14 +449,22 @@ async function search_products_advanced(criteria = {}, options = {}) {
     }
 
     if (criteria.gender) {
-      // TODO: remplacer 'ATTR_GENRE' par le vrai attribute_code, et
-      // 'eq' par la vraie valeur/ID d'option si c'est un select.
-      filterGroups.push([{ field: 'ATTR_GENRE', value: criteria.gender, condition_type: 'eq' }]);
+      const optionId = resolveGenderOptionId(criteria.gender);
+      // Si le genre demandé ne correspond à aucune option connue, on
+      // ignore silencieusement ce critère plutôt que de renvoyer une
+      // erreur Magento ou zéro résultat sur une valeur mal formée.
+      if (optionId) {
+        filterGroups.push([{ field: 'perfume_for', value: optionId, condition_type: 'eq' }]);
+      }
     }
 
     if (criteria.scentFamily) {
-      // TODO: remplacer 'ATTR_FAMILLE_OLFACTIVE' par le vrai attribute_code.
-      filterGroups.push([{ field: 'ATTR_FAMILLE_OLFACTIVE', value: criteria.scentFamily, condition_type: 'eq' }]);
+      // olfactive_families est un champ texte libre (pas une liste à
+      // choix) -> simple LIKE, avec tolérance accents comme ailleurs.
+      const variants = new Set([criteria.scentFamily, stripDiacritics(criteria.scentFamily)]);
+      const filters = [];
+      variants.forEach((v) => filters.push({ field: 'olfactive_families', value: `%${v}%`, condition_type: 'like' }));
+      filterGroups.push(filters);
     }
 
     if (criteria.categoryId) {
