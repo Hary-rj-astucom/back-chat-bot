@@ -135,6 +135,30 @@
 
   var sessionId = getSessionId();
 
+  // Gestion d'expiration de session
+  const SESSION_TIMEOUT = 30 * 60 * 1000;
+
+  function isSessionExpired() {
+    try {
+        const lastActivity = Number(localStorage.getItem(STORAGE_SESSION_KEY + '_last_activity'));
+
+        if (!lastActivity) {
+            return false;
+        }
+        
+        return (Date.now() - lastActivity) > SESSION_TIMEOUT;
+    } catch (e) {
+        return false;
+    }
+  }
+
+  function updateLastActivity() {
+    localStorage.setItem(
+        STORAGE_SESSION_KEY + '_last_activity',
+        Date.now()
+    );
+  }
+
   // ------------------------------------------------------------
   // 3. Styles (injectés en <style>, préfixés "sav-" pour ne
   //    jamais entrer en conflit avec le CSS du site hôte)
@@ -311,7 +335,26 @@
   // 5. Rendu des messages
   // ------------------------------------------------------------
   var messages = loadLocalHistory(); // [{role:'user'|'bot'|'error', text:'...'}]
-  var hasOpenedOnce = messages.length > 0;
+
+  // suppression de la session et generation d'une nouvelle conversation (si expiree)
+  if (isSessionExpired()) {
+
+    fetch(config.apiUrl + '/chat/' + sessionId, {
+        method: 'DELETE'
+    }).finally(function () {
+        localStorage.removeItem(STORAGE_SESSION_KEY);
+        localStorage.removeItem(STORAGE_SESSION_KEY + '_last_activity');
+        localStorage.removeItem(STORAGE_HISTORY_KEY);
+
+        sessionId = getSessionId();
+
+        messages = [];
+        renderAll();
+    });
+
+  }
+  //var hasOpenedOnce = messages.length > 0; // reload le local storage en une seule fois
+  var hasOpenedOnce = false; // reload le local storage a chaque fois
 
   function renderAll() {
     elMessages.innerHTML = '';
@@ -399,6 +442,25 @@
 
   var sending = false;
   function sendMessage() {
+
+    // suppression de la session et generation d'une nouvelle conversation (si expiree)
+    if (isSessionExpired()) {
+
+      fetch(config.apiUrl + '/chat/' + sessionId, {
+          method: 'DELETE'
+      }).finally(function () {
+          localStorage.removeItem(STORAGE_SESSION_KEY);
+          localStorage.removeItem(STORAGE_SESSION_KEY + '_last_activity');
+          localStorage.removeItem(STORAGE_HISTORY_KEY);
+
+          sessionId = getSessionId();
+
+          messages = [];
+          renderAll();
+      });
+      
+    }
+
     var text = elInput.value.trim();
     if (!text || sending) return;
 
@@ -421,6 +483,7 @@
     })
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
+        updateLastActivity(); // sauvegarde le timing du derniere action de l'utilisateur
         return res.json();
       })
       .then(function (data) {
