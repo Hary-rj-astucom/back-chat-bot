@@ -152,18 +152,15 @@ const prestashopToolDefinitions = [
     function: {
       name: 'search_products',
       description:
-        "Recherche de produits. Combine librement tous les critères fournis (recherche AND) : mot-clé dans le nom, référence/SKU, mot-clé dans la description, fourchette de prix, marque, catégorie (ex: 'Homme', 'Femme', 'Soin') et note olfactive (ex: boisé, floral, oriental). Si aucune boutique n'est précisée, recherche automatiquement sur TOUTES les boutiques et fusionne les résultats (chaque résultat indique sa boutique d'origine). Précise `boutique` uniquement si le client demande explicitement une boutique donnée. Retourne au maximum 10 résultats.",
+        "Recherche de produits. Combine librement tous les critères fournis (recherche AND) : mot-clé dans le nom, référence/SKU, mot-clé dans la description (utilise aussi ce champ pour une note olfactive comme 'boisé' ou 'floral', car ces produits n'ont pas de caractéristique olfactive structurée — seule la description texte peut la mentionner), fourchette de prix, marque et catégorie (ex: 'Homme', 'Femme', 'Soin'). Si aucune boutique n'est précisée, recherche automatiquement sur TOUTES les boutiques et fusionne les résultats (chaque résultat indique sa boutique d'origine). Précise `boutique` uniquement si le client demande explicitement une boutique donnée. Retourne au maximum 10 résultats.",
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Mot-clé dans le nom du produit.' },
+          query: { type: 'string', description: 'Mot-clé dans le nom du produit. (ex: marque du produit, nom du produit, contenance et autre)' },
           sku: { type: 'string', description: 'Référence produit (SKU), exacte ou partielle.' },
-          description: { type: 'string', description: 'Mot-clé recherché dans la description du produit.' },
+          description: { type: 'string', description: "Mot-clé recherché dans la description du produit (utile aussi pour une note olfactive, ex: 'boisé', 'floral', 'oriental'. Utile aussi pour avoir la categorie comme homme, mixte, femme. Voir aussi tout ce qui est composition)." },
           price_min: { type: 'number', description: 'Prix minimum.' },
           price_max: { type: 'number', description: 'Prix maximum.' },
-          brand: { type: 'string', description: "Nom de la marque (ex: 'Dior', 'Chanel')." },
-          category: { type: 'string', description: "Nom de la catégorie (ex: 'Homme', 'Femme', 'Maquillage')." },
-          olfactory_note: { type: 'string', description: 'Note olfactive recherchée (ex: boisé, floral, oriental, gourmand).' },
           boutique: {
             type: 'string',
             description: "Boutique précise à cibler. Ne pas renseigner pour chercher sur toutes les boutiques à la fois.",
@@ -333,9 +330,6 @@ const prestashopToolImplementations = {
     description: args.description,
     priceMin: args.price_min,
     priceMax: args.price_max,
-    brand: args.brand,
-    category: args.category,
-    olfactoryNote: args.olfactory_note,
     limit: args.limit
   }, args.boutique),
   get_product: (args) => prestashopService.getProduct(args.idProduct, args.boutique),

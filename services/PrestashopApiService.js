@@ -401,39 +401,6 @@ async function getPaymentMethod(reference) {
 // ============================================================
 
 // ------------------------------------------------------------
-// Résolveurs nom -> ID (usage interne uniquement, jamais exposés
-// directement comme tools au modèle)
-// ------------------------------------------------------------
-
-// ID d'un manufacturer (marque) par son nom, pour UNE boutique donnée.
-// Les ID diffèrent d'une boutique à l'autre pour un même nom de marque,
-// d'où la résolution systématique par boutique plutôt qu'une seule fois.
-async function findManufacturerIdByName(apiUrl, brandName) {
-  const url = `${apiUrl}manufacturers?filter[name]=${encodeURIComponent('%' + brandName + '%')}&output_format=JSON`;
-  const data = await callPrestaShopAPI(url);
-  return data.manufacturers?.[0]?.id ?? null;
-}
-
-// ID(s) de catégorie par son nom, pour UNE boutique donnée (peut y avoir
-// plusieurs matches, ex: sous-catégories par marque -> on garde tous les ID
-// et on utilise le premier, le plus générique en général).
-async function findCategoryIdByName(apiUrl, categoryName) {
-  const url = `${apiUrl}categories?filter[name]=${encodeURIComponent('%' + categoryName + '%')}&output_format=JSON`;
-  const data = await callPrestaShopAPI(url);
-  return (data.categories || []).map(c => c.id);
-}
-
-// ID d'une feature (ex: "Note olfactive") par son nom, pour UNE boutique.
-// ⚠️ Le nom exact de la feature dépend de la config back-office —
-// vérifie-le une fois via Catalogue > Caractéristiques si la recherche
-// par note olfactive ne remonte jamais rien.
-async function findFeatureIdByName(apiUrl, featureName) {
-  const url = `${apiUrl}product_features?filter[name]=${encodeURIComponent('%' + featureName + '%')}&output_format=JSON`;
-  const data = await callPrestaShopAPI(url);
-  return data.product_features?.[0]?.id ?? null;
-}
-
-// ------------------------------------------------------------
 // Détail / stock d'un produit précis (nécessite de connaître déjà
 // son ID PrestaShop, obtenu via une recherche préalable)
 // ------------------------------------------------------------
@@ -462,8 +429,9 @@ async function getProductStock(idProduct, boutique) {
 
 // ------------------------------------------------------------
 // Recherche produits — point d'entrée unique.
-// Combine librement (AND) : nom, référence/SKU, description, prix,
-// marque, catégorie, note olfactive.
+// Combine librement (AND) : nom, référence/SKU, description (texte
+// libre — sert aussi pour une note olfactive éventuellement mentionnée
+// dans le texte), prix, marque, catégorie.
 // `boutique` optionnel :
 //   - fournie  -> recherche uniquement sur cette boutique
 //   - omise    -> recherche en parallèle sur TOUTES les boutiques
@@ -475,69 +443,47 @@ async function getProductStock(idProduct, boutique) {
 // searchProducts quand aucune boutique n'est précisée)
 async function searchProductsInShop(criteria, shopName, apiUrl) {
   const {
-    query,          // mot-clé dans le nom
-    sku,            // référence produit, exacte ou partielle
-    description,    // mot-clé dans la description
-    priceMin,
-    priceMax,
-    brand,          // nom de marque (résolu en id_manufacturer)
-    category,       // nom de catégorie (résolu en id_category_default)
-    olfactoryNote,  // note olfactive (post-filtrage, feature non fiable en filtre natif)
+    query, sku, description, priceMin, priceMax,
     limit = DEFAULT_PAGE_SIZE
   } = criteria;
 
   const pageSize = normalizeLimit(limit);
   const filters = [];
 
-  if (query) filters.push(`filter[name]=${encodeURIComponent('%' + query + '%')}`);
-  if (sku) filters.push(`filter[reference]=${encodeURIComponent('%' + sku + '%')}`);
-  if (description) filters.push(`filter[description]=${encodeURIComponent('%' + description + '%')}`);
-  if (priceMin != null || priceMax != null) {
-    const min = priceMin ?? 0;
-    const max = priceMax ?? 999999;
-    filters.push(`filter[price]=${encodeURIComponent(`[${min},${max}]`)}`);
-  }
+  const buildPrestashopFilter = (text) =>
+    `%[${text.trim().replace(/\s+/g, '%')}]%`;
 
-  // Résolution marque/catégorie PROPRE à cette boutique (les ID diffèrent
-  // d'une boutique à l'autre même pour un nom identique)
-  const [idManufacturer, categoryIds] = await Promise.all([
-    brand ? findManufacturerIdByName(apiUrl, brand) : Promise.resolve(undefined),
-    category ? findCategoryIdByName(apiUrl, category) : Promise.resolve(undefined)
-  ]);
+  if (query) filters.push(`filter[name]=${buildPrestashopFilter(query)}`);
+  if (sku) filters.push(`filter[reference]=${buildPrestashopFilter(sku)}`);
+  if (description) filters.push(`filter[description]=${buildPrestashopFilter(description)}`);
+  
+  const min = priceMin ?? 0.99;
+  const max = priceMax ?? 999999;
+  filters.push(`filter[price]=${encodeURIComponent(`[${min},${max}]`)}`);
 
-  if (brand && !idManufacturer) return []; // marque absente sur CETTE boutique
-  if (brand) filters.push(`filter[id_manufacturer]=${idManufacturer}`);
+  // ⚠️ C'était ça qui manquait : sans `display`, PrestaShop ne renvoie
+  // que les id. On demande ici uniquement les champs utiles à une liste
+  // de résultats (léger) — pas `display=full` qui renverrait TOUS les
+  // champs + associations par produit (lourd, à réserver à getProduct()
+  // pour le détail d'un seul produit).
+  const displayFields = '[id,reference,name,price,id_category_default,description]';
 
-  if (category && (!categoryIds || categoryIds.length === 0)) return []; // catégorie absente sur CETTE boutique
-  if (category) filters.push(`filter[id_category_default]=${categoryIds[0]}`);
+  const url =
+    `${apiUrl}products?${filters.join('&')}` +
+    `&display=${encodeURIComponent(displayFields)}` +
+    `&sort=name_ASC&limit=0,${pageSize}&output_format=JSON`;
 
-  // Si on doit filtrer sur la note olfactive ensuite en JS, on élargit
-  // le lot récupéré pour compenser la perte due au post-filtrage
-  // (borné à 50 pour ne pas exploser le nombre d'appels).
-  const fetchSize = olfactoryNote ? Math.min(pageSize * 5, 50) : pageSize;
-
-  const url = `${apiUrl}products?${filters.join('&')}&sort=name_ASC&limit=0,${fetchSize}&output_format=JSON`;
   const data = await callPrestaShopAPI(url);
-  let products = data.products || [];
 
-  if (olfactoryNote && products.length > 0) {
-    const detailed = await Promise.all(
-      products.map(p => callPrestaShopAPI(`${apiUrl}products/${p.id}?display=full&output_format=JSON`))
-    );
-    const term = olfactoryNote.toLowerCase();
-    products = detailed
-      .map(d => d.product)
-      .filter(Boolean)
-      .filter(p => {
-        const features = p.associations?.product_features || [];
-        return features.some(f => (f.value || '').toLowerCase().includes(term));
-      });
-  }
+  console.log(url);
+  console.log(data);
 
-  return products.slice(0, pageSize).map(p => ({ boutique: shopName, ...p }));
+  const products = data.products || [];
+
+  return products.map(p => ({ boutique: shopName, ...p }));
 }
 
-async function searchProducts(criteria, boutique) {
+async function searchProducts(criteria, boutique = "Digiparf") {
   try {
     const pageSize = normalizeLimit(criteria.limit);
 
