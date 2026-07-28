@@ -46,7 +46,7 @@ const prefix = "/chatbot";
 app.use(prefix + '/public/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // bulle du chatbot dans le dossier widget
-app.use(express.static(path.join(__dirname, 'widget')));
+app.use(prefix, express.static(path.join(__dirname, 'widget')));
 
 app.use(prefix + '/chat', chatroute, chatLimiter);
 
