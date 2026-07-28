@@ -11,6 +11,7 @@ const chatroute = require('./routes/ChatRoutes');
 const app = express();
 const port = process.env.PORT;
 const allowedOrigins = [
+    'https://dev-ia.astucom.com',
     'https://www.cosma-parfumeries.com',
     `http://localhost:${port}`
 ];
