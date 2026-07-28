@@ -130,7 +130,7 @@ async function getOrderPayement(apiUrl, order_id) {
   const url = `${apiUrl}order_payments?filter[order_reference]=${order_id}&output_format=JSON`;
   const data = await callPrestaShopAPI(url);
 
-  if(data.length == 0){
+  if (data.length == 0) {
     return [];
   }
 
@@ -260,7 +260,7 @@ async function getOrderByReference(reference, email_client) {
     }
 
     // verification de l'appartenance de la commande
-    if(customer.email != email_client){
+    if (customer.email != email_client) {
       return {};
     }
 
@@ -397,26 +397,47 @@ async function getPaymentMethod(reference) {
 }
 
 // ============================================================
-// PRODUITS — nécessitent de préciser explicitement la boutique
-// (contrairement aux commandes, les catalogues produits ne sont
-// pas cherchés automatiquement dans toutes les boutiques : un même
-// mot-clé pourrait matcher des produits différents selon la boutique)
+// PRODUITS
 // ============================================================
 
-// Recherche de produits par mot-clé dans le nom
-async function searchProducts(query, boutique, limit = DEFAULT_PAGE_SIZE) {
-  try {
-    const apiUrl = resolveApiUrl(boutique);
-    const pageSize = normalizeLimit(limit);
-    const url = `${apiUrl}products?filter[name]=${encodeURIComponent('%' + query + '%')}&sort=name_ASC&limit=0,${pageSize}&output_format=JSON`;
-    const data = await callPrestaShopAPI(url);
-    return data.products || [];
-  } catch (error) {
-    handleError('searchProducts', error);
-  }
+// ------------------------------------------------------------
+// Résolveurs nom -> ID (usage interne uniquement, jamais exposés
+// directement comme tools au modèle)
+// ------------------------------------------------------------
+
+// ID d'un manufacturer (marque) par son nom, pour UNE boutique donnée.
+// Les ID diffèrent d'une boutique à l'autre pour un même nom de marque,
+// d'où la résolution systématique par boutique plutôt qu'une seule fois.
+async function findManufacturerIdByName(apiUrl, brandName) {
+  const url = `${apiUrl}manufacturers?filter[name]=${encodeURIComponent('%' + brandName + '%')}&output_format=JSON`;
+  const data = await callPrestaShopAPI(url);
+  return data.manufacturers?.[0]?.id ?? null;
 }
 
-// Détail d'un produit via son ID PrestaShop
+// ID(s) de catégorie par son nom, pour UNE boutique donnée (peut y avoir
+// plusieurs matches, ex: sous-catégories par marque -> on garde tous les ID
+// et on utilise le premier, le plus générique en général).
+async function findCategoryIdByName(apiUrl, categoryName) {
+  const url = `${apiUrl}categories?filter[name]=${encodeURIComponent('%' + categoryName + '%')}&output_format=JSON`;
+  const data = await callPrestaShopAPI(url);
+  return (data.categories || []).map(c => c.id);
+}
+
+// ID d'une feature (ex: "Note olfactive") par son nom, pour UNE boutique.
+// ⚠️ Le nom exact de la feature dépend de la config back-office —
+// vérifie-le une fois via Catalogue > Caractéristiques si la recherche
+// par note olfactive ne remonte jamais rien.
+async function findFeatureIdByName(apiUrl, featureName) {
+  const url = `${apiUrl}product_features?filter[name]=${encodeURIComponent('%' + featureName + '%')}&output_format=JSON`;
+  const data = await callPrestaShopAPI(url);
+  return data.product_features?.[0]?.id ?? null;
+}
+
+// ------------------------------------------------------------
+// Détail / stock d'un produit précis (nécessite de connaître déjà
+// son ID PrestaShop, obtenu via une recherche préalable)
+// ------------------------------------------------------------
+
 async function getProduct(idProduct, boutique) {
   try {
     const apiUrl = resolveApiUrl(boutique);
@@ -428,7 +449,6 @@ async function getProduct(idProduct, boutique) {
   }
 }
 
-// Stock disponible d'un produit
 async function getProductStock(idProduct, boutique) {
   try {
     const apiUrl = resolveApiUrl(boutique);
@@ -437,6 +457,120 @@ async function getProductStock(idProduct, boutique) {
     return data.stock_availables || [];
   } catch (error) {
     handleError('getProductStock', error);
+  }
+}
+
+// ------------------------------------------------------------
+// Recherche produits — point d'entrée unique.
+// Combine librement (AND) : nom, référence/SKU, description, prix,
+// marque, catégorie, note olfactive.
+// `boutique` optionnel :
+//   - fournie  -> recherche uniquement sur cette boutique
+//   - omise    -> recherche en parallèle sur TOUTES les boutiques
+//                 (ALL_SHOPS) et fusionne les résultats, chacun tagué
+//                 avec son nom de boutique d'origine
+// ------------------------------------------------------------
+
+// Recherche sur UNE boutique (usage interne, appelée en boucle par
+// searchProducts quand aucune boutique n'est précisée)
+async function searchProductsInShop(criteria, shopName, apiUrl) {
+  const {
+    query,          // mot-clé dans le nom
+    sku,            // référence produit, exacte ou partielle
+    description,    // mot-clé dans la description
+    priceMin,
+    priceMax,
+    brand,          // nom de marque (résolu en id_manufacturer)
+    category,       // nom de catégorie (résolu en id_category_default)
+    olfactoryNote,  // note olfactive (post-filtrage, feature non fiable en filtre natif)
+    limit = DEFAULT_PAGE_SIZE
+  } = criteria;
+
+  const pageSize = normalizeLimit(limit);
+  const filters = [];
+
+  if (query) filters.push(`filter[name]=${encodeURIComponent('%' + query + '%')}`);
+  if (sku) filters.push(`filter[reference]=${encodeURIComponent('%' + sku + '%')}`);
+  if (description) filters.push(`filter[description]=${encodeURIComponent('%' + description + '%')}`);
+  if (priceMin != null || priceMax != null) {
+    const min = priceMin ?? 0;
+    const max = priceMax ?? 999999;
+    filters.push(`filter[price]=${encodeURIComponent(`[${min},${max}]`)}`);
+  }
+
+  // Résolution marque/catégorie PROPRE à cette boutique (les ID diffèrent
+  // d'une boutique à l'autre même pour un nom identique)
+  const [idManufacturer, categoryIds] = await Promise.all([
+    brand ? findManufacturerIdByName(apiUrl, brand) : Promise.resolve(undefined),
+    category ? findCategoryIdByName(apiUrl, category) : Promise.resolve(undefined)
+  ]);
+
+  if (brand && !idManufacturer) return []; // marque absente sur CETTE boutique
+  if (brand) filters.push(`filter[id_manufacturer]=${idManufacturer}`);
+
+  if (category && (!categoryIds || categoryIds.length === 0)) return []; // catégorie absente sur CETTE boutique
+  if (category) filters.push(`filter[id_category_default]=${categoryIds[0]}`);
+
+  // Si on doit filtrer sur la note olfactive ensuite en JS, on élargit
+  // le lot récupéré pour compenser la perte due au post-filtrage
+  // (borné à 50 pour ne pas exploser le nombre d'appels).
+  const fetchSize = olfactoryNote ? Math.min(pageSize * 5, 50) : pageSize;
+
+  const url = `${apiUrl}products?${filters.join('&')}&sort=name_ASC&limit=0,${fetchSize}&output_format=JSON`;
+  const data = await callPrestaShopAPI(url);
+  let products = data.products || [];
+
+  if (olfactoryNote && products.length > 0) {
+    const detailed = await Promise.all(
+      products.map(p => callPrestaShopAPI(`${apiUrl}products/${p.id}?display=full&output_format=JSON`))
+    );
+    const term = olfactoryNote.toLowerCase();
+    products = detailed
+      .map(d => d.product)
+      .filter(Boolean)
+      .filter(p => {
+        const features = p.associations?.product_features || [];
+        return features.some(f => (f.value || '').toLowerCase().includes(term));
+      });
+  }
+
+  return products.slice(0, pageSize).map(p => ({ boutique: shopName, ...p }));
+}
+
+async function searchProducts(criteria, boutique) {
+  try {
+    const pageSize = normalizeLimit(criteria.limit);
+
+    // Boutique précisée -> recherche mono-boutique
+    if (boutique) {
+      const apiUrl = resolveApiUrl(boutique);
+      return await searchProductsInShop(criteria, boutique, apiUrl);
+    }
+
+    // Pas de boutique précisée -> recherche en parallèle sur TOUTES les
+    // boutiques. On isole les erreurs par boutique (une boutique en panne
+    // ou sans la marque/catégorie ne doit pas faire échouer les autres).
+    const shopEntries = Object.entries(ALL_SHOPS); // [nom, apiUrl][]
+    const settled = await Promise.allSettled(
+      shopEntries.map(([name, apiUrl]) => searchProductsInShop(criteria, name, apiUrl))
+    );
+
+    let merged = [];
+    settled.forEach((result, idx) => {
+      if (result.status === 'fulfilled') {
+        merged = merged.concat(result.value);
+      } else {
+        console.error(`Erreur_Prestashop [searchProducts/${shopEntries[idx][0]}]:`, result.reason?.message);
+      }
+    });
+
+    // Tri global par prix croissant (plus pertinent pour une recherche
+    // cross-boutique qu'un tri par nom) ; à adapter si besoin.
+    merged.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+
+    return merged.slice(0, pageSize);
+  } catch (error) {
+    handleError('searchProducts', error);
   }
 }
 
@@ -540,7 +674,7 @@ async function get_store_information() {
   }
 }
 
-async function  get_store_locations() {
+async function get_store_locations() {
   try {
     return `On a juste une boutique en ligne`;
   } catch (error) {

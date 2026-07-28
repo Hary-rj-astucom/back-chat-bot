@@ -10,8 +10,13 @@
  *  - Pour les COMMANDES : le modèle n'a jamais besoin de préciser la
  *    boutique, la recherche est automatique (getOrderByReference /
  *    findOrderLocation scannent les boutiques concernées).
- *  - Pour les PRODUITS et infos boutique : le modèle DOIT préciser la
- *    boutique explicitement (paramètre `boutique`, en enum fermée).
+ *  - Pour la RECHERCHE PRODUITS : la boutique est optionnelle. Si le
+ *    modèle ne la précise pas, la recherche se fait automatiquement
+ *    sur TOUTES les boutiques et les résultats sont fusionnés.
+ *  - Pour le détail/stock d'un produit précis (via son ID) et pour les
+ *    infos boutique (retours, contact, horaires), la boutique DOIT être
+ *    précisée explicitement (paramètre `boutique`, en enum fermée),
+ *    car un même ID produit n'a de sens que dans une boutique donnée.
  * ------------------------------------------------------------
  */
 
@@ -146,15 +151,27 @@ const prestashopToolDefinitions = [
     type: 'function',
     function: {
       name: 'search_products',
-      description: "Recherche des produits par mot-clé dans le nom, dans UNE boutique précise. Retourne au maximum 10 résultats.",
+      description:
+        "Recherche de produits. Combine librement tous les critères fournis (recherche AND) : mot-clé dans le nom, référence/SKU, mot-clé dans la description, fourchette de prix, marque, catégorie (ex: 'Homme', 'Femme', 'Soin') et note olfactive (ex: boisé, floral, oriental). Si aucune boutique n'est précisée, recherche automatiquement sur TOUTES les boutiques et fusionne les résultats (chaque résultat indique sa boutique d'origine). Précise `boutique` uniquement si le client demande explicitement une boutique donnée. Retourne au maximum 10 résultats.",
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Mot-clé de recherche.' },
-          boutique: BOUTIQUE_SCHEMA,
+          query: { type: 'string', description: 'Mot-clé dans le nom du produit.' },
+          sku: { type: 'string', description: 'Référence produit (SKU), exacte ou partielle.' },
+          description: { type: 'string', description: 'Mot-clé recherché dans la description du produit.' },
+          price_min: { type: 'number', description: 'Prix minimum.' },
+          price_max: { type: 'number', description: 'Prix maximum.' },
+          brand: { type: 'string', description: "Nom de la marque (ex: 'Dior', 'Chanel')." },
+          category: { type: 'string', description: "Nom de la catégorie (ex: 'Homme', 'Femme', 'Maquillage')." },
+          olfactory_note: { type: 'string', description: 'Note olfactive recherchée (ex: boisé, floral, oriental, gourmand).' },
+          boutique: {
+            type: 'string',
+            description: "Boutique précise à cibler. Ne pas renseigner pour chercher sur toutes les boutiques à la fois.",
+            enum: BOUTIQUE_ENUM
+          },
           limit: LIST_LIMIT_SCHEMA
         },
-        required: ['query', 'boutique']
+        required: []
       }
     }
   },
@@ -310,7 +327,17 @@ const prestashopToolImplementations = {
   get_tracking: (args) => prestashopService.getTracking(args.reference),
   get_payment_method: (args) => prestashopService.getPaymentMethod(args.reference),
 
-  search_products: (args) => prestashopService.searchProducts(args.query, args.boutique, args.limit),
+  search_products: (args) => prestashopService.searchProducts({
+    query: args.query,
+    sku: args.sku,
+    description: args.description,
+    priceMin: args.price_min,
+    priceMax: args.price_max,
+    brand: args.brand,
+    category: args.category,
+    olfactoryNote: args.olfactory_note,
+    limit: args.limit
+  }, args.boutique),
   get_product: (args) => prestashopService.getProduct(args.idProduct, args.boutique),
   get_product_stock: (args) => prestashopService.getProductStock(args.idProduct, args.boutique),
 
