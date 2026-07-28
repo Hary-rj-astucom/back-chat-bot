@@ -45,7 +45,9 @@ app.use('/public/uploads', express.static(path.join(__dirname, 'public/uploads')
 // bulle du chatbot dans le dossier widget
 app.use(express.static(path.join(__dirname, 'widget')));
 
-app.use('/chat', chatroute, chatLimiter);
+const prefix = "";
+
+app.use(prefix + '/chat', chatroute, chatLimiter);
 
 // Start the server
 app.listen(port, () => {
