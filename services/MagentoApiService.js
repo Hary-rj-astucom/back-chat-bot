@@ -1508,7 +1508,7 @@ async function getInvoicePDF(orderNumber, langue, baseUrl = process.env.BASE_URL
     // Générer PDF normal
     const browser = await puppeteer.launch({
         headless: "true",
-        //executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        executablePath: "/usr/bin/google-chrome", // a commenter en prod
         args: ["--no-sandbox", "--disable-setuid-sandbox"]
     });
 
