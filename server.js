@@ -39,13 +39,13 @@ app.use(cors({
 app.use(helmet());
 app.use(express.json());
 
+const prefix = "/chatbot";
+
 // les contenue public
-app.use('/public/uploads', express.static(path.join(__dirname, 'public/uploads')));
+app.use(prefix + '/public/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // bulle du chatbot dans le dossier widget
 app.use(express.static(path.join(__dirname, 'widget')));
-
-const prefix = "chatbot";
 
 app.use(prefix + '/chat', chatroute, chatLimiter);
 
