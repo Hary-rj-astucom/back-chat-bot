@@ -1,6 +1,6 @@
 require('dotenv').config();
 const OpenAI = require('openai');
-const { magentoToolDefinitions, magentoToolImplementations } = require('../tools/MagentoTools');
+const { magentoToolDefinitions, magentoToolImplementations } = require('../tools/Magentotools');
 const { prestashopToolDefinitions, prestashopToolImplementations } = require('../tools/Prestashoptools');
 
 // ------------------------------------------------------------
