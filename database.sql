@@ -14,6 +14,7 @@ CREATE TABLE message_chat(
     acteur VARCHAR(180) NOT NULL,
     conversation_chat_id INT NOT NULL,
     message TEXT,
+    type_message VARCHAR(25) DEFAULT "text"
     date_created DATETIME NOT NULL DEFAULT NOW(),
     FOREIGN KEY (conversation_chat_id) REFERENCES conversation_chat(id)
 );
