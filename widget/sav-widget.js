@@ -21,7 +21,9 @@
  *   data-shop-name     Nom affiché dans l'en-tête (défaut: "Service client")
  *   data-color         Couleur principale du widget, ex: "#4338CA"
  *   data-position       "right" (défaut) ou "left"
- *   data-welcome-message  Message d'accueil affiché à l'ouverture
+ *   data-welcome-message  (optionnel) Non utilisé pour le premier message
+ *                         du chat, qui alterne désormais automatiquement
+ *                         entre plusieurs langues (voir WELCOME_TRANSLATIONS)
  *   data-customer-email   Email du client déjà connecté (injecté côté
  *                         serveur par le template Magento/PrestaShop),
  *                         pour éviter de le lui redemander dans le chat
@@ -85,6 +87,44 @@
   if (!config.apiUrl) {
     console.error('[SAV Widget] data-api-url est requis sur la balise <script>.');
     return;
+  }
+
+  // ------------------------------------------------------------
+  // 1bis. Message de bienvenue multilingue rotatif
+  //       Premier message du chat : le texte change de langue
+  //       toutes les 2 secondes, en boucle, tant que le client
+  //       n'a pas encore écrit son premier message.
+  // ------------------------------------------------------------
+  var WELCOME_TRANSLATIONS = [
+    'Bonjour 👋 Comment puis-je vous aider avec votre commande aujourd\u2019hui ?', // français
+    'Hello 👋 How can I help you with your order today?', // anglais
+    'Hallo 👋 Wie kann ich Ihnen heute mit Ihrer Bestellung helfen?', // allemand
+    'Hallo 👋 Hoe kan ik u vandaag helpen met uw bestelling?', // néerlandais
+    'Hola 👋 ¿Cómo puedo ayudarte con tu pedido hoy?', // espagnol
+    '您好 👋 今天我可以怎样帮助您处理订单？', // chinois
+    'Ciao 👋 Come posso aiutarti con il tuo ordine oggi?', // italien
+    'Hej 👋 Hur kan jag hjälpa dig med din beställning idag?', // suédois
+    'Servus 👋 Wie kann ich Ihnen heute mit Ihrer Bestellung helfen?', // autrichien (allemand d'Autriche)
+    'Hej 👋 Hvordan kan jeg hjælpe dig med din bestilling i dag?', // danois
+    'Dia dhuit 👋 Conas is féidir liom cabhrú leat le d\u2019ordú inniu?' // irlandais (gaélique)
+  ];
+  var WELCOME_ROTATION_MS = 2000;
+  var welcomeIntervalId = null;
+
+  function stopWelcomeRotation() {
+    if (welcomeIntervalId) {
+      clearInterval(welcomeIntervalId);
+      welcomeIntervalId = null;
+    }
+  }
+
+  function startWelcomeRotation(bubbleEl) {
+    var idx = 0;
+    stopWelcomeRotation();
+    welcomeIntervalId = setInterval(function () {
+      idx = (idx + 1) % WELCOME_TRANSLATIONS.length;
+      bubbleEl.innerHTML = linkify(WELCOME_TRANSLATIONS[idx]);
+    }, WELCOME_ROTATION_MS);
   }
 
   // ------------------------------------------------------------
@@ -361,12 +401,24 @@
 
   function renderAll() {
     elMessages.innerHTML = '';
+    stopWelcomeRotation();
+
     if (messages.length === 0) {
-      var welcome = config.welcomeMessage;
+      // Premier message du chat : bulle dont le texte alterne entre
+      // les différentes langues toutes les 2 secondes.
+      var welcomeBubble = document.createElement('div');
+      welcomeBubble.className = 'sav-msg bot';
+      welcomeBubble.innerHTML = linkify(WELCOME_TRANSLATIONS[0]);
+      elMessages.appendChild(welcomeBubble);
+      startWelcomeRotation(welcomeBubble);
+
       if (config.customerEmail) {
-        welcome += '\n\nJe vois que vous êtes connecté(e), je n\u2019aurai pas du mal pour retrouver vos commandes 👍';
+        appendBubble(
+          'bot',
+          'Je vois que vous êtes connecté(e), je n\u2019aurai pas du mal pour retrouver vos commandes 👍',
+          false
+        );
       }
-      appendBubble('bot', welcome, false);
     } else {
       messages.forEach(function (m) {
         appendBubble(m.role, m.text, false);
@@ -383,6 +435,9 @@
     if (persist) {
       messages.push({ role: role, text: text });
       saveLocalHistory(messages);
+      // Dès que la conversation démarre réellement, on arrête la
+      // rotation des langues du message d'accueil.
+      stopWelcomeRotation();
     }
     scrollToBottom();
   }
@@ -420,6 +475,7 @@
   function closePanel() {
     root.classList.remove('open');
     elPanel.setAttribute('aria-hidden', 'true');
+    stopWelcomeRotation();
   }
   elBubble.addEventListener('click', function () {
     root.classList.contains('open') ? closePanel() : openPanel();
