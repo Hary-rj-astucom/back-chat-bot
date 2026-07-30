@@ -108,7 +108,7 @@
     'Hej 👋 Hvordan kan jeg hjælpe dig med din bestilling i dag?', // danois
     'Dia dhuit 👋 Conas is féidir liom cabhrú leat le d\u2019ordú inniu?' // irlandais (gaélique)
   ];
-  var WELCOME_ROTATION_MS = 2000;
+  var WELCOME_ROTATION_MS = 700;
   var welcomeIntervalId = null;
 
   function stopWelcomeRotation() {
@@ -412,13 +412,13 @@
       elMessages.appendChild(welcomeBubble);
       startWelcomeRotation(welcomeBubble);
 
-      if (config.customerEmail) {
-        appendBubble(
-          'bot',
-          'Je vois que vous êtes connecté(e), je n\u2019aurai pas du mal pour retrouver vos commandes 👍',
-          false
-        );
-      }
+      // if (config.customerEmail) {
+      //   appendBubble(
+      //     'bot',
+      //     'Je vois que vous êtes connecté(e), je n\u2019aurai pas du mal pour retrouver vos commandes 👍',
+      //     false
+      //   );
+      // }
     } else {
       messages.forEach(function (m) {
         appendBubble(m.role, m.text, false);
