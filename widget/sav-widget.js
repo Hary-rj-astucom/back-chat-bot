@@ -27,6 +27,9 @@
  *   data-customer-email   Email du client déjà connecté (injecté côté
  *                         serveur par le template Magento/PrestaShop),
  *                         pour éviter de le lui redemander dans le chat
+ *   data-bg-image      (optionnel) URL d'une image de fond pour la zone
+ *                       de conversation. Si absent, un motif discret aux
+ *                       couleurs du widget est utilisé par défaut.
  * ------------------------------------------------------------
  */
 (function () {
@@ -69,6 +72,7 @@
     accent: currentScript.getAttribute('data-accent') || '#00C2A8',
     position: currentScript.getAttribute('data-position') === 'left' ? 'left' : 'right',
     customerEmail: detectCustomerEmail(),
+    bgImage: currentScript.getAttribute('data-bg-image') || '',
     welcomeMessage:
       currentScript.getAttribute('data-welcome-message') ||
       'Bonjour 👋 Comment puis-je vous aider avec votre commande aujourd\u2019hui ?'
@@ -91,9 +95,10 @@
 
   // ------------------------------------------------------------
   // 1bis. Message de bienvenue multilingue rotatif
-  //       Premier message du chat : le texte change de langue
-  //       toutes les 2 secondes, en boucle, tant que le client
-  //       n'a pas encore écrit son premier message.
+  //       Premier message du chat : le texte change de langue en
+  //       fondu toutes les 700ms, en boucle, jusqu'à ce que le
+  //       client envoie son premier message (la bulle disparaît
+  //       alors définitivement).
   // ------------------------------------------------------------
   var WELCOME_TRANSLATIONS = [
     'Bonjour 👋 Comment puis-je vous aider avec votre commande aujourd\u2019hui ?', // français
@@ -108,8 +113,10 @@
     'Hej 👋 Hvordan kan jeg hjælpe dig med din bestilling i dag?', // danois
     'Dia dhuit 👋 Conas is féidir liom cabhrú leat le d\u2019ordú inniu?' // irlandais (gaélique)
   ];
-  var WELCOME_ROTATION_MS = 700;
+  var WELCOME_ROTATION_MS = 700; // temps entre 2 changements de langue
+  var WELCOME_FADE_MS = 260; // durée du fondu (aller ou retour)
   var welcomeIntervalId = null;
+  var welcomeBubbleEl = null; // référence à la bulle d'accueil affichée
 
   function stopWelcomeRotation() {
     if (welcomeIntervalId) {
@@ -118,12 +125,30 @@
     }
   }
 
+  function removeWelcomeBubble() {
+    stopWelcomeRotation();
+    if (welcomeBubbleEl && welcomeBubbleEl.parentNode) {
+      welcomeBubbleEl.parentNode.removeChild(welcomeBubbleEl);
+    }
+    welcomeBubbleEl = null;
+  }
+
   function startWelcomeRotation(bubbleEl) {
     var idx = 0;
     stopWelcomeRotation();
+    bubbleEl.style.transition = 'opacity ' + WELCOME_FADE_MS + 'ms ease';
+    bubbleEl.style.opacity = '1';
     welcomeIntervalId = setInterval(function () {
-      idx = (idx + 1) % WELCOME_TRANSLATIONS.length;
-      bubbleEl.innerHTML = linkify(WELCOME_TRANSLATIONS[idx]);
+      if (!bubbleEl.isConnected) { stopWelcomeRotation(); return; }
+      // fondu sortant
+      bubbleEl.style.opacity = '0';
+      setTimeout(function () {
+        if (!bubbleEl.isConnected) return;
+        idx = (idx + 1) % WELCOME_TRANSLATIONS.length;
+        bubbleEl.innerHTML = linkify(WELCOME_TRANSLATIONS[idx]);
+        // fondu entrant
+        bubbleEl.style.opacity = '1';
+      }, WELCOME_FADE_MS);
     }, WELCOME_ROTATION_MS);
   }
 
@@ -200,6 +225,26 @@
   }
 
   // ------------------------------------------------------------
+  // 2bis. Background de la zone de conversation
+  //       Si data-bg-image est fourni : cette image, couvrante,
+  //       légèrement voilée pour garder les messages lisibles.
+  //       Sinon : un motif de points discret aux couleurs du widget.
+  // ------------------------------------------------------------
+  function buildDefaultPatternDataUri(color) {
+    var svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36">' +
+      '<circle cx="2" cy="2" r="1.6" fill="' + color + '" fill-opacity="0.16"/>' +
+      '</svg>';
+    return 'data:image/svg+xml,' + encodeURIComponent(svg);
+  }
+
+  var messagesBgCss = config.bgImage
+    ? 'background-image:linear-gradient(rgba(247,247,251,.86),rgba(247,247,251,.86)),url(\'' + config.bgImage.replace(/'/g, "\\'") + '\');' +
+      'background-size:cover;background-position:center;background-repeat:no-repeat;'
+    : 'background-image:url(\'' + buildDefaultPatternDataUri(config.color) + '\');' +
+      'background-size:36px 36px;background-repeat:repeat;';
+
+  // ------------------------------------------------------------
   // 3. Styles (injectés en <style>, préfixés "sav-" pour ne
   //    jamais entrer en conflit avec le CSS du site hôte)
   // ------------------------------------------------------------
@@ -236,7 +281,7 @@
     'cursor:pointer;padding:4px;border-radius:6px;}',
     '.sav-header-close:hover{opacity:1;background:rgba(255,255,255,.14);}',
     '.sav-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;',
-    'background:#F7F7FB;}',
+    'background-color:#F7F7FB;' + messagesBgCss + '}',
     '.sav-msg{max-width:80%;padding:9px 13px;border-radius:14px;font-size:13.5px;line-height:1.45;',
     'white-space:pre-wrap;word-wrap:break-word;animation:sav-in .18s ease;}',
     '@keyframes sav-in{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}',
@@ -401,24 +446,17 @@
 
   function renderAll() {
     elMessages.innerHTML = '';
-    stopWelcomeRotation();
+    removeWelcomeBubble();
 
     if (messages.length === 0) {
       // Premier message du chat : bulle dont le texte alterne entre
-      // les différentes langues toutes les 2 secondes.
+      // les différentes langues en fondu, jusqu'au premier envoi.
       var welcomeBubble = document.createElement('div');
       welcomeBubble.className = 'sav-msg bot';
       welcomeBubble.innerHTML = linkify(WELCOME_TRANSLATIONS[0]);
       elMessages.appendChild(welcomeBubble);
+      welcomeBubbleEl = welcomeBubble;
       startWelcomeRotation(welcomeBubble);
-
-      // if (config.customerEmail) {
-      //   appendBubble(
-      //     'bot',
-      //     'Je vois que vous êtes connecté(e), je n\u2019aurai pas du mal pour retrouver vos commandes 👍',
-      //     false
-      //   );
-      // }
     } else {
       messages.forEach(function (m) {
         appendBubble(m.role, m.text, false);
@@ -435,9 +473,9 @@
     if (persist) {
       messages.push({ role: role, text: text });
       saveLocalHistory(messages);
-      // Dès que la conversation démarre réellement, on arrête la
-      // rotation des langues du message d'accueil.
-      stopWelcomeRotation();
+      // Dès que la conversation démarre réellement, la bulle
+      // d'accueil multilingue disparaît définitivement.
+      removeWelcomeBubble();
     }
     scrollToBottom();
   }
