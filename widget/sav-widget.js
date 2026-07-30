@@ -228,6 +228,8 @@
     '  .sav-panel{position:fixed;inset:0;width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0;bottom:0;right:0;left:0;}',
     '  .sav-widget{bottom:16px;' + config.position + ':16px;}',
     '  .sav-widget.open .sav-bubble{display:none;}',
+    '  .sav-header-close{padding:8px;}',
+    '  .sav-header-close svg{width:20px;height:20px;}',
     '}',
     '@media (prefers-reduced-motion:reduce){',
     '  .sav-bubble,.sav-panel,.sav-msg,.sav-typing span{transition:none!important;animation:none!important;}',
