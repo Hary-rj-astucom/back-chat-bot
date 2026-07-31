@@ -106,9 +106,10 @@
     'Hallo 👋 Wie kann ich Ihnen heute mit Ihrer Bestellung helfen?', // allemand
     'Hallo 👋 Hoe kan ik u vandaag helpen met uw bestelling?', // néerlandais
     'Hola 👋 ¿Cómo puedo ayudarte con tu pedido hoy?', // espagnol
-    '您好 👋 今天我可以怎样帮助您处理订单？', // chinois
     'Ciao 👋 Come posso aiutarti con il tuo ordine oggi?', // italien
     'Hej 👋 Hur kan jag hjälpa dig med din beställning idag?', // suédois
+    '您好 👋 今天我可以怎样帮助您处理订单？', // chinois
+    'Здравствуйте! 👋 Чем я могу помочь вам с вашим заказом сегодня?', //russe
     'Servus 👋 Wie kann ich Ihnen heute mit Ihrer Bestellung helfen?', // autrichien (allemand d'Autriche)
     'Hej 👋 Hvordan kan jeg hjælpe dig med din bestilling i dag?', // danois
     'Dia dhuit 👋 Conas is féidir liom cabhrú leat le d\u2019ordú inniu?' // irlandais (gaélique)
