@@ -113,7 +113,7 @@
     'Hej 👋 Hvordan kan jeg hjælpe dig med din bestilling i dag?', // danois
     'Dia dhuit 👋 Conas is féidir liom cabhrú leat le d\u2019ordú inniu?' // irlandais (gaélique)
   ];
-  var WELCOME_ROTATION_MS = 1200; // temps entre 2 changements de langue
+  var WELCOME_ROTATION_MS = 2000; // temps entre 2 changements de langue
   var WELCOME_FADE_MS = 560; // durée du fondu (aller ou retour)
   var welcomeIntervalId = null;
   var welcomeBubbleEl = null; // référence à la bulle d'accueil affichée
